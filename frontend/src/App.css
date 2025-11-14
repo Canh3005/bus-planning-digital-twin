@@ -1,0 +1,79 @@
+/* ~/bus-admin-backend/bus-admin-frontend/src/App.css */
+html, body, #root {
+  height: 100%; /* QUAN TRỌNG: Cần cho Leaflet */
+  margin: 0;
+  padding: 0;
+  overflow: hidden; 
+}
+
+.App {
+  height: 100%;
+}
+
+.controls {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000; 
+    background: white;
+    padding: 10px 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+    display: flex; 
+    gap: 10px;
+}
+
+.trip-planner {
+    display: flex;
+    gap: 8px;
+    border-right: 1px solid #eee;
+    padding-right: 10px;
+}
+
+.controls select,
+.trip-planner input,
+.trip-planner button {
+    padding: 8px 12px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+/* Style cho thanh toán */
+.checkout-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #f7f7f7;
+    border-radius: 4px;
+    padding: 0 10px;
+    border: 1px solid #ddd;
+}
+.checkout-box p {
+    margin: 0;
+    font-size: 14px;
+    color: #333;
+}
+.btn-checkout {
+    background-color: #008000; 
+    color: white;
+    font-weight: bold;
+    border: none;
+    padding: 8px 15px !important;
+}
+
+.btn-gps {
+    background-color: #2ecc71;
+    color: white;
+    font-weight: bold;
+    border: none;
+}
+
+.btn-find-trip {
+    background-color: #3498db;
+    color: white;
+    font-weight: bold;
+    border: none;
+}

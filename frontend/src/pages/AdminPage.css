@@ -1,0 +1,51 @@
+/* src/pages/AdminPage.css */
+.admin-page {
+  display: flex;
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+
+.admin-content {
+  flex: 1;
+  margin-left: 260px;
+  padding: 30px 40px;
+  transition: margin-left 0.3s;
+}
+
+.admin-header {
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #e0e0e0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.admin-header-text {
+  flex: 1;
+}
+
+.admin-header h1 {
+  margin: 0 0 8px 0;
+  font-size: 32px;
+  color: #2c3e50;
+  font-weight: 700;
+}
+
+.admin-subtitle {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .admin-content {
+    margin-left: 0;
+    padding: 20px 15px;
+  }
+  
+  .admin-header h1 {
+    font-size: 24px;
+  }
+}

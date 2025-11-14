@@ -1,0 +1,20 @@
+/* BusMapPage.css */
+.bus-map-page {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+}
+
+.user-menu-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1001;
+}
+
+@media (max-width: 768px) {
+  .user-menu-container {
+    top: 10px;
+    right: 10px;
+  }
+}

@@ -1,0 +1,63 @@
+/* src/components/Controls/CheckoutBox.css */
+.checkout-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+  border: 2px solid #ffc107;
+  border-radius: 10px;
+  margin-top: 15px;
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
+}
+
+.checkout-box p {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  color: #333;
+  flex: 1;
+}
+
+.checkout-box b {
+  color: #d32f2f;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.btn-checkout {
+  padding: 14px 32px;
+  background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
+  white-space: nowrap;
+}
+
+.btn-checkout:hover {
+  background: linear-gradient(135deg, #f57c00 0%, #e65100 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(255, 152, 0, 0.4);
+}
+
+.btn-checkout:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .checkout-box {
+    flex-direction: column;
+    text-align: center;
+    gap: 15px;
+  }
+  
+  .btn-checkout {
+    width: 100%;
+  }
+}

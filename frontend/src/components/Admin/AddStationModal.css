@@ -1,0 +1,649 @@
+/* src/components/Admin/AddStationModal.css */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.3s;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25px 30px;
+  border-bottom: 2px solid #f0f0f0;
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 1;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 24px;
+  color: #2c3e50;
+  font-weight: 700;
+}
+
+.btn-close {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background-color: #f0f0f0;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  color: #666;
+}
+
+.btn-close:hover {
+  background-color: #ff4444;
+  color: white;
+  transform: rotate(90deg);
+}
+
+.modal-body {
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Search Section */
+.search-section {
+  margin-bottom: 25px;
+  position: relative;
+  z-index: 100;
+  order: -1;
+}
+
+.search-loading {
+  padding: 10px;
+  color: #666;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.search-results {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+}
+
+.search-result-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 15px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item:hover {
+  background-color: #f8f9fa;
+}
+
+.result-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.result-info {
+  flex: 1;
+}
+
+.result-name {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 4px;
+}
+
+.result-address {
+  font-size: 13px;
+  color: #7f8c8d;
+  line-height: 1.4;
+}
+
+/* Map Section */
+.map-section {
+  margin-bottom: 25px;
+  position: relative;
+  z-index: 1;
+}
+
+.map-container-modal {
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 8px;
+  position: relative;
+}
+
+.map-container-modal.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  border-radius: 0;
+  margin: 0;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.map-container-modal.fullscreen .leaflet-container {
+  height: 100vh !important;
+  width: 100vw !important;
+}
+
+.btn-fullscreen {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  width: 40px;
+  height: 40px;
+  background: white;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: all 0.3s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.btn-fullscreen:hover {
+  background-color: #f8f9fa;
+  transform: scale(1.05);
+}
+
+.btn-fullscreen:active {
+  transform: scale(0.95);
+}
+
+/* Form */
+.station-form {
+  margin-top: 20px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.required {
+  color: #ff4444;
+  margin-left: 4px;
+}
+
+.loading-text {
+  color: #3498db;
+  font-size: 12px;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  transition: all 0.3s;
+  background-color: #fafafa;
+  box-sizing: border-box;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #3498db;
+  background-color: white;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+.form-input.error {
+  border-color: #ff4444;
+  background-color: #fff5f5;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.error-message {
+  color: #ff4444;
+  font-size: 13px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.error-message::before {
+  content: '⚠️';
+}
+
+/* Actions */
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 2px solid #f0f0f0;
+}
+
+.btn-cancel,
+.btn-submit {
+  padding: 12px 28px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-cancel {
+  background-color: #ecf0f1;
+  color: #2c3e50;
+}
+
+.btn-cancel:hover {
+  background-color: #bdc3c7;
+}
+
+.btn-submit {
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+}
+
+.btn-submit:hover {
+  background: linear-gradient(135deg, #2980b9 0%, #21618c 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    max-height: 95vh;
+  }
+  
+  .modal-header {
+    padding: 20px;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-actions {
+    flex-direction: column-reverse;
+  }
+  
+  .btn-cancel,
+  .btn-submit {
+    width: 100%;
+  }
+}
+
+/* ========================================
+   ROUTE-SPECIFIC STYLES
+   ======================================== */
+
+/* Mode selector */
+.mode-selector {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 12px 20px;
+  background: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.mode-btn:hover {
+  background: #e8f5e9;
+  border-color: #4caf50;
+}
+
+.mode-btn.active {
+  background: #4caf50;
+  color: white;
+  border-color: #4caf50;
+}
+
+/* Station selection (Mode 1) */
+.station-selection {
+  margin-top: 15px;
+}
+
+.selected-stations {
+  margin-top: 20px;
+}
+
+.selected-stations h4 {
+  font-size: 15px;
+  color: #555;
+  margin-bottom: 12px;
+}
+
+.station-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.station-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  background: white;
+  transition: background 0.2s;
+}
+
+.station-item:hover {
+  background: #f9f9f9;
+}
+
+.station-item:last-child {
+  border-bottom: none;
+}
+
+.station-order {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #4caf50;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.station-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.station-info strong {
+  display: block;
+  color: #333;
+  font-size: 14px;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.station-info small {
+  display: block;
+  color: #888;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.station-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.station-actions button {
+  padding: 6px 10px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.station-actions button:hover:not(:disabled) {
+  background: #e0e0e0;
+  transform: scale(1.05);
+}
+
+.station-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.station-actions .btn-remove {
+  background: #ffebee;
+  border-color: #ffcdd2;
+}
+
+.station-actions .btn-remove:hover {
+  background: #ef5350;
+  color: white;
+}
+
+.empty-text {
+  text-align: center;
+  color: #999;
+  padding: 30px;
+  font-style: italic;
+}
+
+/* Map click mode (Mode 2) */
+.map-click-mode {
+  margin-top: 15px;
+}
+
+.instruction {
+  background: #e3f2fd;
+  border-left: 4px solid #2196f3;
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+}
+
+.instruction p {
+  margin: 0;
+  color: #1565c0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.clicked-points {
+  margin-top: 15px;
+}
+
+.clicked-points h4 {
+  font-size: 15px;
+  color: #555;
+  margin-bottom: 12px;
+}
+
+.point-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.point-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-bottom: 1px solid #f0f0f0;
+  background: white;
+  transition: background 0.2s;
+}
+
+.point-item:hover {
+  background: #f9f9f9;
+}
+
+.point-item:last-child {
+  border-bottom: none;
+}
+
+.point-order {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #ff9800;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.point-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.point-info strong {
+  display: block;
+  color: #333;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.point-info small {
+  display: block;
+  color: #888;
+  font-size: 11px;
+}
+
+.point-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.point-actions button {
+  padding: 5px 8px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.point-actions button:hover:not(:disabled) {
+  background: #e0e0e0;
+  transform: scale(1.05);
+}
+
+.point-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.point-actions .btn-remove {
+  background: #ffebee;
+  border-color: #ffcdd2;
+}
+
+.point-actions .btn-remove:hover {
+  background: #ef5350;
+  color: white;
+}

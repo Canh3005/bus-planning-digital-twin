@@ -1,28 +1,89 @@
 /* src/components/Controls/ControlPanel.css */
 .controls {
-  position: absolute;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  width: 320px;
   z-index: 1000;
   background: white;
-  padding: 20px 25px;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  width: 90%;
-  max-width: 900px;
+  padding: 24px 20px;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Custom scrollbar cho sidebar */
+.controls::-webkit-scrollbar {
+  width: 6px;
+}
+
+.controls::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 3px;
+}
+
+.controls::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.controls::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* Header cho sidebar */
+.controls-header {
+  padding-bottom: 16px;
+  border-bottom: 2px solid #f0f0f0;
+  margin-bottom: 8px;
+}
+
+.controls-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 8px 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.controls-subtitle {
+  font-size: 13px;
+  color: #666;
+  margin: 0;
+}
+
+@media (max-width: 1024px) {
+  .controls {
+    width: 320px;
+    padding: 20px 16px;
+  }
 }
 
 @media (max-width: 768px) {
   .controls {
-    top: 10px;
-    width: 95%;
-    padding: 15px;
+    width: 100%;
+    height: auto;
+    max-height: 50vh;
+    bottom: 0;
+    top: auto;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+    border-radius: 20px 20px 0 0;
   }
-}
-
-@media (min-width: 1200px) {
-  .controls {
-    max-width: 1000px;
+  
+  .controls-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: 12px;
+  }
+  
+  .controls-title {
+    font-size: 20px;
   }
 }

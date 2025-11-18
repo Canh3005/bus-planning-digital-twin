@@ -10,7 +10,9 @@ import CurrentLocationMarker from './CurrentLocationMarker';
 const MapView = ({ 
   stations, 
   routes, 
-  currentLocation, 
+  currentLocation,
+  manualStartLocation,
+  destinationLocation,
   highlightedRouteId,
   selectedRouteId,
   hideOtherStations 
@@ -24,21 +26,29 @@ const MapView = ({
     ? stations.filter(station => highlightedStationIds.includes(station._id || station.id))
     : stations;
   
+  // Xác định vị trí bắt đầu (ưu tiên manual, fallback GPS)
+  const startLocation = manualStartLocation || currentLocation;
+  
   return (
     <MapContainer
-      center={currentLocation || MAP_CONFIG.DEFAULT_CENTER}
+      center={startLocation || MAP_CONFIG.DEFAULT_CENTER}
       zoom={MAP_CONFIG.DEFAULT_ZOOM}
       style={{ height: '100vh', width: '100%' }}
       scrollWheelZoom={true}
     >
-      <LocationHandler center={currentLocation} />
+      <LocationHandler center={startLocation} />
       
       <TileLayer
         attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       
-      <CurrentLocationMarker position={currentLocation} />
+      {/* Hiển thị marker xanh lá cho điểm bắt đầu */}
+      <CurrentLocationMarker position={startLocation} label="Điểm bắt đầu" />
+      
+      {/* Hiển thị marker xanh lá cho điểm đến */}
+      <CurrentLocationMarker position={destinationLocation} label="Điểm đến" />
+      
       <RoutePolylines routes={routes} highlightedRouteId={highlightedRouteId} />
       <StationMarkers stations={displayStations} highlightedStationIds={highlightedStationIds} />
     </MapContainer>

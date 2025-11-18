@@ -1,6 +1,6 @@
 /* ~/bus-admin-backend/bus-admin-frontend/src/App.css */
 html, body, #root {
-  height: 100%; /* QUAN TRỌNG: Cần cho Leaflet */
+  height: 100%; 
   margin: 0;
   padding: 0;
   overflow: hidden; 
@@ -10,7 +10,7 @@ html, body, #root {
   height: 100%;
 }
 
-.controls {
+/* .controls {
     position: absolute;
     top: 10px;
     left: 50%;
@@ -22,9 +22,9 @@ html, body, #root {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
     display: flex; 
     gap: 10px;
-}
+} */
 
-.trip-planner {
+/* .trip-planner {
     display: flex;
     gap: 8px;
     border-right: 1px solid #eee;
@@ -41,7 +41,6 @@ html, body, #root {
     cursor: pointer;
 }
 
-/* Style cho thanh toán */
 .checkout-box {
     display: flex;
     align-items: center;
@@ -76,4 +75,4 @@ html, body, #root {
     color: white;
     font-weight: bold;
     border: none;
-}
+} */

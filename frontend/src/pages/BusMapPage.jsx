@@ -16,19 +16,39 @@ const BusMapPage = () => {
 
   const [selectedRouteId, setSelectedRouteId] = useState(null);
   const [startStationName, setStartStationName] = useState('');
-  const [destinationName, setDestinationName] = useState('Đại học Bách Khoa');
+  const [destinationName, setDestinationName] = useState('');
   const [foundTripRouteId, setFoundTripRouteId] = useState(null);
   const [tripCost, setTripCost] = useState(null);
   const [hideOtherStations, setHideOtherStations] = useState(false);
+  const [destinationLocation, setDestinationLocation] = useState(null);
+  const [manualStartLocation, setManualStartLocation] = useState(null); // Vị trí chọn từ search
 
   // Handler: Lấy vị trí GPS
   const handleGetLocation = async () => {
     setFoundTripRouteId(null);
     setTripCost(null);
     setStartStationName('');
+    setManualStartLocation(null); // Xóa vị trí manual khi dùng GPS
 
     const result = await fetchCurrentLocation();
     alert(result.message);
+  };
+
+  // Handler: Cập nhật vị trí bắt đầu từ Nominatim
+  const handleStartLocationChange = (lat, lon, displayName) => {
+    if (lat && lon) {
+      setManualStartLocation([parseFloat(lat), parseFloat(lon)]);
+      setStartStationName(displayName);
+      clearLocation(); // Xóa GPS location khi chọn manual
+    }
+  };
+
+  // Handler: Cập nhật vị trí đích từ Nominatim
+  const handleDestinationLocationChange = (lat, lon, displayName) => {
+    if (lat && lon) {
+      setDestinationLocation([parseFloat(lat), parseFloat(lon)]);
+      setDestinationName(displayName);
+    }
   };
 
   // Handler: Tìm chuyến xe
@@ -100,6 +120,8 @@ const BusMapPage = () => {
     setStartStationName('');
     setDestinationName('');
     clearLocation();
+    setDestinationLocation(null);
+    setManualStartLocation(null);
   };
 
   // Handler: Lọc tuyến
@@ -107,7 +129,7 @@ const BusMapPage = () => {
     setSelectedRouteId(routeId);
     setFoundTripRouteId(null);
     setTripCost(null);
-    setHideOtherStations(false); // Reset khi chọn tuyến mới
+    // Không reset hideOtherStations - giữ nguyên trạng thái
   };
 
   // Handler: Toggle ẩn/hiện trạm khác
@@ -142,6 +164,8 @@ const BusMapPage = () => {
         hideOtherStations={hideOtherStations}
         onStartChange={setStartStationName}
         onDestinationChange={setDestinationName}
+        onStartLocationChange={handleStartLocationChange}
+        onDestinationLocationChange={handleDestinationLocationChange}
         onGetLocation={handleGetLocation}
         onFindTrip={handleFindTrip}
         onCheckout={handleCheckout}
@@ -149,14 +173,18 @@ const BusMapPage = () => {
         onToggleOtherStations={handleToggleOtherStations}
       />
 
-      <MapView
-        stations={stations}
-        routes={routesToDisplay}
-        currentLocation={currentLocation}
-        highlightedRouteId={foundTripRouteId}
-        selectedRouteId={selectedRouteId}
-        hideOtherStations={hideOtherStations}
-      />
+      <div className="map-container">
+        <MapView
+          stations={stations}
+          routes={routesToDisplay}
+          currentLocation={currentLocation}
+          manualStartLocation={manualStartLocation}
+          destinationLocation={destinationLocation}
+          highlightedRouteId={foundTripRouteId}
+          selectedRouteId={selectedRouteId}
+          hideOtherStations={hideOtherStations}
+        />
+      </div>
     </div>
   );
 };

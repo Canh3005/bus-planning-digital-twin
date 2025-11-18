@@ -1,33 +1,33 @@
 /* src/components/Controls/CheckoutBox.css */
 .checkout-box {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  flex-direction: column;
+  gap: 12px;
   padding: 18px 20px;
   background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
   border: 2px solid #ffc107;
   border-radius: 10px;
-  margin-top: 15px;
   box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
 }
 
 .checkout-box p {
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 500;
   color: #333;
-  flex: 1;
+  text-align: center;
 }
 
 .checkout-box b {
   color: #d32f2f;
   font-size: 20px;
   font-weight: 700;
+  display: block;
 }
 
 .btn-checkout {
-  padding: 14px 32px;
+  width: 100%;
+  padding: 14px 24px;
   background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
   color: white;
   border: none;
@@ -37,7 +37,6 @@
   cursor: pointer;
   transition: all 0.3s;
   box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
-  white-space: nowrap;
 }
 
 .btn-checkout:hover {

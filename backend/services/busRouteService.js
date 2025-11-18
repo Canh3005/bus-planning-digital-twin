@@ -1,5 +1,6 @@
 // services/busRouteService.js
 const BusRoute = require('../models/BusRoute');
+const axios = require('axios');
 
 class BusRouteService {
     /**
@@ -112,6 +113,104 @@ class BusRouteService {
             throw new Error('Không tìm thấy tuyến xe để xóa');
         }
         return { message: 'Xóa tuyến xe thành công' };
+    }
+
+    /**
+     * Lấy đường đi thật từ OSRM API cho một route cụ thể
+     */
+    async getRealRoutePathById(id) {
+        const route = await this.getRouteById(id);
+        const path = route.routePath;
+
+        // Nếu không có path hoặc ít hơn 2 điểm, trả về route gốc
+        if (!path || !path.coordinates || path.coordinates.length < 2) {
+            return {
+                ...route.toObject(),
+                realPath: path?.coordinates || []
+            };
+        }
+
+        try {
+            // Tạo waypoints từ coordinates [lng, lat]
+            const waypoints = path.coordinates.map(coord => `${coord[0]},${coord[1]}`).join(';');
+            const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`;
+            
+            console.log(`🔄 Fetching real path for route ${route.routeName}...`);
+            const response = await axios.get(osrmUrl, { timeout: 5000 });
+            const data = response.data;
+            
+            if (data.code === 'Ok' && data.routes && data.routes[0]) {
+                console.log(`✅ Successfully fetched real path for ${route.routeName}`);
+                return {
+                    ...route.toObject(),
+                    realPath: data.routes[0].geometry.coordinates
+                };
+            } else {
+                console.warn(`⚠️ OSRM returned no route for ${route.routeName}, using original path`);
+                return {
+                    ...route.toObject(),
+                    realPath: path.coordinates
+                };
+            }
+        } catch (error) {
+            console.error(`❌ Error fetching OSRM route for ${route.routeName}:`, error.message);
+            // Fallback to original path
+            return {
+                ...route.toObject(),
+                realPath: path.coordinates
+            };
+        }
+    }
+
+    /**
+     * Lấy đường đi thật từ OSRM API (deprecated - dùng getRealRoutePathById thay thế)
+     */
+    async getRealRoutePaths() {
+        const routes = await this.getAllRoutes();
+        const routesWithRealPaths = [];
+
+        for (const route of routes) {
+            const path = route.routePath;
+            if (!path || !path.coordinates || path.coordinates.length < 2) {
+                routesWithRealPaths.push({
+                    ...route.toObject(),
+                    realPath: path?.coordinates || []
+                });
+                continue;
+            }
+
+            try {
+                // Tạo waypoints từ coordinates [lng, lat]
+                const waypoints = path.coordinates.map(coord => `${coord[0]},${coord[1]}`).join(';');
+                const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`;
+                
+                const response = await axios.get(osrmUrl);
+                const data = response.data;
+                
+                if (data.code === 'Ok' && data.routes && data.routes[0]) {
+                    routesWithRealPaths.push({
+                        ...route.toObject(),
+                        realPath: data.routes[0].geometry.coordinates
+                    });
+                } else {
+                    console.warn(`⚠️ OSRM returned no route for ${route.routeName}, using original path`);
+                    // Fallback to original path
+                    routesWithRealPaths.push({
+                        ...route.toObject(),
+                        realPath: path.coordinates
+                    });
+                }
+            } catch (error) {
+                console.error(`❌ Error fetching OSRM route for ${route.routeName}:`, error.message);
+                // Fallback to original path
+                routesWithRealPaths.push({
+                    ...route.toObject(),
+                    realPath: path.coordinates
+                });
+            }
+        }
+
+        return routesWithRealPaths;
     }
 }
 

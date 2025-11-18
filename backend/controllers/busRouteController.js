@@ -66,6 +66,32 @@ class BusRouteController {
             res.status(404).json({ error: err.message });
         }
     }
+
+    /**
+     * GET /api/routes/real-paths - Lấy tất cả tuyến xe với đường đi thật từ OSRM
+     */
+    async getRealRoutePaths(req, res) {
+        try {
+            const routes = await busRouteService.getRealRoutePaths();
+            res.status(200).json(routes);
+        } catch (err) {
+            console.error("Lỗi khi lấy đường đi thật:", err);
+            res.status(500).json({ error: "Lỗi máy chủ nội bộ" });
+        }
+    }
+
+    /**
+     * GET /api/routes/:id/real-path - Lấy đường đi thật cho một route cụ thể
+     */
+    async getRealRoutePathById(req, res) {
+        try {
+            const route = await busRouteService.getRealRoutePathById(req.params.id);
+            res.status(200).json(route);
+        } catch (err) {
+            console.error("Lỗi khi lấy đường đi thật cho route:", err);
+            res.status(404).json({ error: err.message });
+        }
+    }
 }
 
 module.exports = new BusRouteController();

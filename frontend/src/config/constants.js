@@ -6,8 +6,10 @@ export const MAP_CONFIG = {
 };
 
 export const ROUTE_COLORS = {
-  DEFAULT: '#4a148c',
-  HIGHLIGHT: '#e84c3d',
+  DEFAULT: '#FF6B00',      // Cam nổi bật
+  HIGHLIGHT: '#00D9FF',    // Xanh cyan sáng
+  SECONDARY: '#FFD600',    // Vàng rực
+  SUCCESS: '#00E676',      // Xanh lá neon
 };
 
 export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';

@@ -19,6 +19,7 @@ const BusMapPage = () => {
   const [destinationName, setDestinationName] = useState('Đại học Bách Khoa');
   const [foundTripRouteId, setFoundTripRouteId] = useState(null);
   const [tripCost, setTripCost] = useState(null);
+  const [hideOtherStations, setHideOtherStations] = useState(false);
 
   // Handler: Lấy vị trí GPS
   const handleGetLocation = async () => {
@@ -106,12 +107,18 @@ const BusMapPage = () => {
     setSelectedRouteId(routeId);
     setFoundTripRouteId(null);
     setTripCost(null);
+    setHideOtherStations(false); // Reset khi chọn tuyến mới
+  };
+
+  // Handler: Toggle ẩn/hiện trạm khác
+  const handleToggleOtherStations = () => {
+    setHideOtherStations(!hideOtherStations);
   };
 
   // Filter routes để hiển thị
   const routesToDisplay = selectedRouteId
-    ? routes.filter(r => r.id === selectedRouteId)
-    : routes;
+    ? routes.filter(r => (r._id || r.id) === selectedRouteId)
+    : [];
 
   if (stationsLoading || routesLoading) {
     return <div className="loading">Đang tải dữ liệu...</div>;
@@ -132,12 +139,14 @@ const BusMapPage = () => {
         isLoadingLocation={isLoadingLocation}
         tripCost={tripCost}
         selectedRouteId={selectedRouteId}
+        hideOtherStations={hideOtherStations}
         onStartChange={setStartStationName}
         onDestinationChange={setDestinationName}
         onGetLocation={handleGetLocation}
         onFindTrip={handleFindTrip}
         onCheckout={handleCheckout}
         onRouteSelect={handleRouteSelect}
+        onToggleOtherStations={handleToggleOtherStations}
       />
 
       <MapView
@@ -145,6 +154,8 @@ const BusMapPage = () => {
         routes={routesToDisplay}
         currentLocation={currentLocation}
         highlightedRouteId={foundTripRouteId}
+        selectedRouteId={selectedRouteId}
+        hideOtherStations={hideOtherStations}
       />
     </div>
   );

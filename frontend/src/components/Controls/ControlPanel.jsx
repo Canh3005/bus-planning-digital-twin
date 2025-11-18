@@ -14,12 +14,14 @@ const ControlPanel = ({
   isLoadingLocation,
   tripCost,
   selectedRouteId,
+  hideOtherStations,
   onStartChange,
   onDestinationChange,
   onGetLocation,
   onFindTrip,
   onCheckout,
   onRouteSelect,
+  onToggleOtherStations,
 }) => {
   return (
     <div className="controls">
@@ -40,7 +42,9 @@ const ControlPanel = ({
       <RouteFilter
         routes={routes}
         selectedRouteId={selectedRouteId}
+        hideOtherStations={hideOtherStations}
         onRouteSelect={onRouteSelect}
+        onToggleOtherStations={onToggleOtherStations}
       />
     </div>
   );

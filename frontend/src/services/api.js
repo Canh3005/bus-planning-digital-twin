@@ -44,6 +44,16 @@ export const routeAPI = {
     const response = await apiClient.get('/api/routes');
     return response.data;
   },
+
+  getRealPaths: async () => {
+    const response = await apiClient.get('/api/routes/real-paths');
+    return response.data;
+  },
+
+  getRealPathById: async (id) => {
+    const response = await apiClient.get(`/api/routes/${id}/real-path`);
+    return response.data;
+  },
   
   getById: async (id) => {
     const response = await apiClient.get(`/api/routes/${id}`);

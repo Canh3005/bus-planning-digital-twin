@@ -11,8 +11,19 @@ const MapView = ({
   stations, 
   routes, 
   currentLocation, 
-  highlightedRouteId 
+  highlightedRouteId,
+  selectedRouteId,
+  hideOtherStations 
 }) => {
+  // Lấy danh sách station IDs từ route được chọn
+  const selectedRoute = routes.find(r => (r._id || r.id) === selectedRouteId);
+  const highlightedStationIds = selectedRoute?.stations?.map(s => s.stationId?._id || s.stationId) || [];
+  
+  // Filter stations nếu cần ẩn trạm khác
+  const displayStations = hideOtherStations && selectedRouteId
+    ? stations.filter(station => highlightedStationIds.includes(station._id || station.id))
+    : stations;
+  
   return (
     <MapContainer
       center={currentLocation || MAP_CONFIG.DEFAULT_CENTER}
@@ -29,7 +40,7 @@ const MapView = ({
       
       <CurrentLocationMarker position={currentLocation} />
       <RoutePolylines routes={routes} highlightedRouteId={highlightedRouteId} />
-      <StationMarkers stations={stations} />
+      <StationMarkers stations={displayStations} highlightedStationIds={highlightedStationIds} />
     </MapContainer>
   );
 };

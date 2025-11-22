@@ -6,6 +6,7 @@ import LocationHandler from './LocationHandler';
 import StationMarkers from './StationMarkers';
 import RoutePolylines from './RoutePolylines';
 import CurrentLocationMarker from './CurrentLocationMarker';
+import PathSegments from './PathSegments';
 
 const MapView = ({ 
   stations, 
@@ -15,7 +16,8 @@ const MapView = ({
   destinationLocation,
   highlightedRouteId,
   selectedRouteId,
-  hideOtherStations 
+  hideOtherStations,
+  foundPaths
 }) => {
   // Lấy danh sách station IDs từ route được chọn
   const selectedRoute = routes.find(r => (r._id || r.id) === selectedRouteId);
@@ -49,7 +51,17 @@ const MapView = ({
       {/* Hiển thị marker xanh lá cho điểm đến */}
       <CurrentLocationMarker position={destinationLocation} label="Điểm đến" />
       
-      <RoutePolylines routes={routes} highlightedRouteId={highlightedRouteId} />
+      {/* Hiển thị đoạn đường đi tìm được (chỉ từ trạm lên đến trạm xuống) */}
+      {foundPaths ? (
+        <PathSegments foundPaths={foundPaths} />
+      ) : (
+        <RoutePolylines 
+          routes={routes} 
+          highlightedRouteId={highlightedRouteId}
+          foundPaths={null}
+        />
+      )}
+      
       <StationMarkers stations={displayStations} highlightedStationIds={highlightedStationIds} />
     </MapContainer>
   );

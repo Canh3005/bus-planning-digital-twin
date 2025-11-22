@@ -12,6 +12,7 @@ const ControlPanel = ({
   destinationName,
   currentLocation,
   isLoadingLocation,
+  isSearching,
   tripCost,
   selectedRouteId,
   hideOtherStations,
@@ -38,6 +39,7 @@ const ControlPanel = ({
         stations={stations}
         currentLocation={currentLocation}
         isLoadingLocation={isLoadingLocation}
+        isSearching={isSearching}
         onStartChange={onStartChange}
         onDestinationChange={onDestinationChange}
         onStartLocationChange={onStartLocationChange}

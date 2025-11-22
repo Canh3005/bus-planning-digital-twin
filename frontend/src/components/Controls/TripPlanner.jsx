@@ -8,6 +8,7 @@ const TripPlanner = ({
   stations,
   currentLocation,
   isLoadingLocation,
+  isSearching,
   onStartChange,
   onDestinationChange,
   onStartLocationChange,
@@ -210,9 +211,9 @@ const TripPlanner = ({
       <button
         onClick={onFindTrip}
         className="btn-find-trip"
-        disabled={!startStationName && !currentLocation}
+        disabled={(!startStationName && !currentLocation) || isSearching}
       >
-        Tìm Chuyến Xe
+        {isSearching ? '🔍 Đang tìm...' : 'Tìm Chuyến Xe'}
       </button>
     </div>
   );

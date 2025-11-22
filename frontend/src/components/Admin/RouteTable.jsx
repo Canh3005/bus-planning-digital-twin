@@ -67,6 +67,17 @@ const RouteTable = ({ routes, loading, onRefetch, allStations }) => {
         <div className="empty-icon">🚌</div>
         <h3>Chưa có tuyến xe nào</h3>
         <p>Hệ thống chưa có dữ liệu tuyến xe buýt</p>
+        <button className="btn-add" onClick={() => setIsAddModalOpen(true)}>
+          <span>➕</span> Thêm Tuyến Mới
+        </button>
+        
+        {/* Add Route Modal */}
+        <AddRouteModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onSuccess={handleAddSuccess}
+          allStations={allStations}
+        />
       </div>
     );
   }

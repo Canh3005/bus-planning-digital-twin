@@ -112,8 +112,8 @@ class PathfindingService {
      */
     async findShortestPath(startLat, startLon, endLat, endLon, maxDistance = 1000) {
         // Bước 1: Tìm trạm gần điểm bắt đầu và điểm đến
-        const startStation = await this.findNearestStation(startLat, startLon, maxDistance);
-        const endStation = await this.findNearestStation(endLat, endLon, maxDistance);
+        const startStation = this.findNearestStation(startLat, startLon, maxDistance);
+        const endStation = this.findNearestStation(endLat, endLon, maxDistance);
 
         console.log(`Start station: ${startStation.name}, End station: ${endStation.name}`);
 

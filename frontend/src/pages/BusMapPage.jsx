@@ -25,6 +25,11 @@ const BusMapPage = () => {
   const [foundPaths, setFoundPaths] = useState(null); // Lưu kết quả tìm đường
   const [isSearching, setIsSearching] = useState(false);
 
+  // Handler: Đóng kết quả tìm kiếm
+  const handleCloseTripResult = () => {
+    setFoundPaths(null);
+  };
+
   // Handler: Lấy vị trí GPS
   const handleGetLocation = async () => {
     setFoundTripRouteId(null);
@@ -135,28 +140,6 @@ const BusMapPage = () => {
         }
         
         setTripCost(bestPath.totalCost);
-
-        // Tạo thông báo chi tiết
-        let message = `🚌 Tìm thấy ${result.paths.length} đường đi!\n\n`;
-        message += `Đường đi tốt nhất:\n`;
-        
-        bestPath.routes.forEach((segment, index) => {
-          message += `${index + 1}. Tuyến ${segment.route.routeName}\n`;
-          message += `   Lên xe: ${segment.boardStation.name}\n`;
-          message += `   Xuống xe: ${segment.alightStation.name}\n`;
-        });
-        
-        if (bestPath.transfers > 0) {
-          message += `\n🔄 Số lần chuyển tuyến: ${bestPath.transfers}`;
-          if (bestPath.transferStation) {
-            message += `\n📍 Trạm chuyển: ${bestPath.transferStation.name}`;
-          }
-        }
-        
-        message += `\n💰 Tổng chi phí: ${bestPath.totalCost.toLocaleString()} VND`;
-        message += `\n📏 Khoảng cách: ${bestPath.totalDistance.toFixed(2)} km`;
-
-        alert(message);
       } else {
         alert(result.message || 'Không tìm thấy tuyến xe buýt phù hợp.');
       }
@@ -226,6 +209,7 @@ const BusMapPage = () => {
         tripCost={tripCost}
         selectedRouteId={selectedRouteId}
         hideOtherStations={hideOtherStations}
+        foundPaths={foundPaths}
         onStartChange={setStartStationName}
         onDestinationChange={setDestinationName}
         onStartLocationChange={handleStartLocationChange}
@@ -235,6 +219,7 @@ const BusMapPage = () => {
         onCheckout={handleCheckout}
         onRouteSelect={handleRouteSelect}
         onToggleOtherStations={handleToggleOtherStations}
+        onCloseTripResult={handleCloseTripResult}
       />
 
       <div className="map-container">

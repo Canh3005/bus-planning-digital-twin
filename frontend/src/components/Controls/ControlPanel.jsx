@@ -3,6 +3,7 @@ import React from 'react';
 import TripPlanner from './TripPlanner';
 import CheckoutBox from './CheckoutBox';
 import RouteFilter from './RouteFilter';
+import TripResult from './TripResult';
 import './ControlPanel.css';
 
 const ControlPanel = ({
@@ -16,6 +17,7 @@ const ControlPanel = ({
   tripCost,
   selectedRouteId,
   hideOtherStations,
+  foundPaths,
   onStartChange,
   onDestinationChange,
   onStartLocationChange,
@@ -25,6 +27,7 @@ const ControlPanel = ({
   onCheckout,
   onRouteSelect,
   onToggleOtherStations,
+  onCloseTripResult,
 }) => {
   return (
     <div className="controls">
@@ -47,6 +50,8 @@ const ControlPanel = ({
         onGetLocation={onGetLocation}
         onFindTrip={onFindTrip}
       />
+      
+      <TripResult foundPaths={foundPaths} onClose={onCloseTripResult} />
       
       <CheckoutBox tripCost={tripCost} onCheckout={onCheckout} />
       

@@ -76,6 +76,32 @@ export const routeAPI = {
   },
 };
 
+// API cho Pathfinding
+export const pathfindingAPI = {
+  findRoute: async (startLat, startLon, endLat, endLon, maxDistance = 1000) => {
+    const response = await apiClient.post('/api/pathfinding/find-route', {
+      startLat,
+      startLon,
+      endLat,
+      endLon,
+      maxDistance
+    });
+    return response.data;
+  },
+
+  findNearestStation: async (lat, lon, maxDistance = 1000) => {
+    const response = await apiClient.get('/api/pathfinding/nearest-station', {
+      params: { lat, lon, maxDistance }
+    });
+    return response.data;
+  },
+
+  findRoutesByStation: async (stationId) => {
+    const response = await apiClient.get(`/api/pathfinding/routes-by-station/${stationId}`);
+    return response.data;
+  },
+};
+
 // API cho Authentication
 export const authAPI = {
   register: async (userData) => {

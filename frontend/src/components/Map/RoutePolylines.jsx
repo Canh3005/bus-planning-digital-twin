@@ -4,7 +4,7 @@ import { Polyline, Popup } from 'react-leaflet';
 import { routeAPI } from '../../services/api';
 import { ROUTE_COLORS } from '../../config/constants';
 
-const RoutePolylines = ({ routes, highlightedRouteId }) => {
+const RoutePolylines = ({ routes, highlightedRouteId, foundPaths }) => {
   const [routesWithRealPaths, setRoutesWithRealPaths] = useState([]);
   const [loading, setLoading] = useState(true);
   const cacheRef = useRef({}); // Cache để lưu real paths đã fetch
@@ -136,10 +136,26 @@ const RoutePolylines = ({ routes, highlightedRouteId }) => {
 
   return (
     <>
-      {routesWithRealPaths.map(route => {
+      {routesWithRealPaths.map((route, index) => {
         const routeId = route._id || route.id;
         const isHighlight = highlightedRouteId === routeId;
         const coordinates = route.realPath || [];
+        
+        // Kiểm tra xem route này có phải là segment trong path tìm được không
+        let isPathSegment = false;
+        let segmentIndex = -1;
+        let segmentInfo = null;
+        
+        if (foundPaths && foundPaths.paths && foundPaths.paths.length > 0) {
+          const bestPath = foundPaths.paths[0];
+          segmentIndex = bestPath.routes.findIndex(seg => 
+            (seg.route._id || seg.route.id) === routeId
+          );
+          if (segmentIndex >= 0) {
+            isPathSegment = true;
+            segmentInfo = bestPath.routes[segmentIndex];
+          }
+        }
         
         // Chuyển đổi [lng, lat] sang [lat, lng] cho Leaflet
         const positions = coordinates.map(coord => [coord[1], coord[0]]);
@@ -150,18 +166,48 @@ const RoutePolylines = ({ routes, highlightedRouteId }) => {
         const startStation = route.startStationId?.name || route.start || 'N/A';
         const endStation = route.endStationId?.name || route.end || 'N/A';
         
+        // Chọn màu dựa trên loại route
+        let color, weight, opacity, dashArray;
+        
+        if (isPathSegment) {
+          // Màu cho các segment trong path tìm được
+          color = segmentIndex === 0 ? ROUTE_COLORS.PATH_SEGMENT_1 : ROUTE_COLORS.PATH_SEGMENT_2;
+          weight = 8;
+          opacity = 1;
+          dashArray = null;
+        } else if (isHighlight) {
+          color = ROUTE_COLORS.HIGHLIGHT;
+          weight = 10;
+          opacity = 0.9;
+          dashArray = '12, 6';
+        } else {
+          color = ROUTE_COLORS.DEFAULT;
+          weight = 6;
+          opacity = 0.9;
+          dashArray = null;
+        }
+        
         return (
           <Polyline
             key={routeId}
             positions={positions}
-            color={isHighlight ? ROUTE_COLORS.HIGHLIGHT : ROUTE_COLORS.DEFAULT}
-            weight={isHighlight ? 10 : 6}
-            opacity={0.9}
-            dashArray={isHighlight ? '12, 6' : null}
+            color={color}
+            weight={weight}
+            opacity={opacity}
+            dashArray={dashArray}
             smoothFactor={1}
-            className={isHighlight ? 'route-highlight' : 'route-normal'}
+            className={isPathSegment ? 'route-path-segment' : (isHighlight ? 'route-highlight' : 'route-normal')}
           >
             <Popup>
+              {isPathSegment && (
+                <>
+                  <b>🚌 Segment {segmentIndex + 1}</b><br/>
+                  Lên xe: {segmentInfo.boardStation.name}<br/>
+                  Xuống xe: {segmentInfo.alightStation.name}<br/>
+                  Khoảng cách: {segmentInfo.distance.toFixed(2)} km<br/>
+                  <hr style={{margin: '5px 0'}} />
+                </>
+              )}
               Tuyến: <b>{routeName}</b> <br/>
               Từ: {startStation} → Đến: {endStation}
               <br/><small>✅ Đường đi thật trên bản đồ</small>

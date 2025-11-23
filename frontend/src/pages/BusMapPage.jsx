@@ -6,7 +6,7 @@ import UserMenu from '../components/UserMenu';
 import { useStations } from '../hooks/useStations';
 import { useRoutes } from '../hooks/useRoutes';
 import { useGeolocation } from '../hooks/useGeolocation';
-import { findClosestStation } from '../utils/geolocation';
+import { pathfindingAPI } from '../services/api';
 import './BusMapPage.css';
 
 const BusMapPage = () => {
@@ -22,6 +22,13 @@ const BusMapPage = () => {
   const [hideOtherStations, setHideOtherStations] = useState(false);
   const [destinationLocation, setDestinationLocation] = useState(null);
   const [manualStartLocation, setManualStartLocation] = useState(null); // Vị trí chọn từ search
+  const [foundPaths, setFoundPaths] = useState(null); // Lưu kết quả tìm đường
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Handler: Đóng kết quả tìm kiếm
+  const handleCloseTripResult = () => {
+    setFoundPaths(null);
+  };
 
   // Handler: Lấy vị trí GPS
   const handleGetLocation = async () => {
@@ -52,58 +59,97 @@ const BusMapPage = () => {
   };
 
   // Handler: Tìm chuyến xe
-  const handleFindTrip = useCallback(() => {
+  const handleFindTrip = useCallback(async () => {
     setFoundTripRouteId(null);
     setTripCost(null);
+    setFoundPaths(null);
+    setIsSearching(true);
 
-    // A. Xác định trạm khởi hành
-    let actualStartStation;
-    if (startStationName) {
-      actualStartStation = stations.find(s =>
-        s.name.toLowerCase().trim() === startStationName.toLowerCase().trim()
-      );
-    } else if (currentLocation) {
-      actualStartStation = findClosestStation(
-        currentLocation[0],
-        currentLocation[1],
-        stations
-      );
-    } else {
-      alert('Vui lòng chọn trạm đi hoặc xác định vị trí GPS.');
-      return;
+    try {
+      // Xác định tọa độ điểm bắt đầu
+      let startLat, startLon;
+      const startLocation = manualStartLocation || currentLocation;
+      
+      if (!startLocation && !startStationName) {
+        alert('Vui lòng chọn điểm bắt đầu hoặc dùng GPS.');
+        setIsSearching(false);
+        return;
+      }
+
+      if (startLocation) {
+        startLat = startLocation[0];
+        startLon = startLocation[1];
+      } else {
+        // Tìm trạm từ tên
+        const station = stations.find(s =>
+          s.name.toLowerCase().trim() === startStationName.toLowerCase().trim()
+        );
+        if (station && station.location && station.location.coordinates) {
+          startLon = station.location.coordinates[0];
+          startLat = station.location.coordinates[1];
+        } else {
+          alert('Không tìm thấy tọa độ điểm bắt đầu.');
+          setIsSearching(false);
+          return;
+        }
+      }
+
+      // Xác định tọa độ điểm đến
+      let endLat, endLon;
+      
+      if (!destinationLocation && !destinationName) {
+        alert('Vui lòng chọn điểm đến.');
+        setIsSearching(false);
+        return;
+      }
+
+      if (destinationLocation) {
+        endLat = destinationLocation[0];
+        endLon = destinationLocation[1];
+      } else {
+        // Tìm trạm từ tên
+        const station = stations.find(s =>
+          s.name.toLowerCase().trim() === destinationName.toLowerCase().trim()
+        );
+        if (station && station.location && station.location.coordinates) {
+          endLon = station.location.coordinates[0];
+          endLat = station.location.coordinates[1];
+        } else {
+          alert('Không tìm thấy tọa độ điểm đến.');
+          setIsSearching(false);
+          return;
+        }
+      }
+
+      console.log('🔍 Tìm đường từ:', { startLat, startLon }, 'đến:', { endLat, endLon });
+
+      // Gọi API tìm đường
+      const result = await pathfindingAPI.findRoute(startLat, startLon, endLat, endLon, 1000);
+
+      console.log('📍 Kết quả tìm đường:', result);
+
+      if (result.success && result.paths && result.paths.length > 0) {
+        setFoundPaths(result);
+        
+        const bestPath = result.paths[0];
+        const routeIds = bestPath.routes.map(r => r.route._id || r.route.id);
+        
+        // Hiển thị tuyến đầu tiên
+        if (routeIds.length > 0) {
+          setFoundTripRouteId(routeIds[0]);
+        }
+        
+        setTripCost(bestPath.totalCost);
+      } else {
+        alert(result.message || 'Không tìm thấy tuyến xe buýt phù hợp.');
+      }
+    } catch (error) {
+      console.error('❌ Lỗi khi tìm đường:', error);
+      alert('Lỗi khi tìm đường. Vui lòng thử lại.');
+    } finally {
+      setIsSearching(false);
     }
-
-    // B. Xác định trạm đích
-    const destinationStation = stations.find(s =>
-      s.name.toLowerCase().trim() === destinationName.toLowerCase().trim()
-    );
-
-    if (!actualStartStation || !destinationStation) {
-      alert(`Không tìm thấy trạm: ${!actualStartStation ? (startStationName || 'GPS') : destinationName}`);
-      return;
-    }
-
-    // C. Tìm tuyến phù hợp
-    const foundRoute = routes.find(route => {
-      const startName = route.startStationId?.name || route.start || '';
-      const endName = route.endStationId?.name || route.end || '';
-      return (
-        startName.toLowerCase() === actualStartStation.name.toLowerCase() &&
-        endName.toLowerCase() === destinationStation.name.toLowerCase()
-      );
-    });
-
-    if (foundRoute) {
-      const routeId = foundRoute._id || foundRoute.id;
-      const routeName = foundRoute.routeName || foundRoute.name;
-      setFoundTripRouteId(routeId);
-      const cost = foundRoute.ticketPrice || Math.floor(Math.random() * 5 + 7) * 1000;
-      setTripCost(cost);
-      alert(`🚌 Tuyến phù hợp: ${routeName}. Giá vé: ${cost.toLocaleString()} VND.`);
-    } else {
-      alert('Không tìm thấy tuyến xe buýt trực tiếp nào phù hợp.');
-    }
-  }, [startStationName, destinationName, currentLocation, stations, routes]);
+  }, [startStationName, destinationName, currentLocation, manualStartLocation, destinationLocation, stations]);
 
   // Handler: Thanh toán
   const handleCheckout = () => {
@@ -140,7 +186,7 @@ const BusMapPage = () => {
   // Filter routes để hiển thị
   const routesToDisplay = selectedRouteId
     ? routes.filter(r => (r._id || r.id) === selectedRouteId)
-    : [];
+    : []; // Không hiển thị full routes khi tìm path
 
   if (stationsLoading || routesLoading) {
     return <div className="loading">Đang tải dữ liệu...</div>;
@@ -159,9 +205,11 @@ const BusMapPage = () => {
         destinationName={destinationName}
         currentLocation={currentLocation}
         isLoadingLocation={isLoadingLocation}
+        isSearching={isSearching}
         tripCost={tripCost}
         selectedRouteId={selectedRouteId}
         hideOtherStations={hideOtherStations}
+        foundPaths={foundPaths}
         onStartChange={setStartStationName}
         onDestinationChange={setDestinationName}
         onStartLocationChange={handleStartLocationChange}
@@ -171,6 +219,7 @@ const BusMapPage = () => {
         onCheckout={handleCheckout}
         onRouteSelect={handleRouteSelect}
         onToggleOtherStations={handleToggleOtherStations}
+        onCloseTripResult={handleCloseTripResult}
       />
 
       <div className="map-container">
@@ -183,6 +232,7 @@ const BusMapPage = () => {
           highlightedRouteId={foundTripRouteId}
           selectedRouteId={selectedRouteId}
           hideOtherStations={hideOtherStations}
+          foundPaths={foundPaths}
         />
       </div>
     </div>

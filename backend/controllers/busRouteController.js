@@ -92,6 +92,31 @@ class BusRouteController {
             res.status(404).json({ error: err.message });
         }
     }
+
+    /**
+     * POST /api/routes/find-trip - Tìm chuyến đi (nối tuyến) <--- ĐÃ THÊM
+     */
+    async findTrip(req, res) {
+        try {
+            const { startLocation, destinationLocation, startName, destinationName } = req.body;
+            
+            if (!startLocation || !destinationLocation) {
+                return res.status(400).json({ error: "Thiếu thông tin vị trí bắt đầu hoặc điểm đến." });
+            }
+
+            const tripOptions = await busRouteService.findOptimalTrip(
+                startLocation, 
+                destinationLocation,
+                startName, 
+                destinationName
+            );
+            
+            res.status(200).json(tripOptions);
+        } catch (err) {
+            console.error("Lỗi khi tìm chuyến đi:", err);
+            res.status(500).json({ error: "Lỗi máy chủ nội bộ trong quá trình tìm chuyến đi." });
+        }
+    }
 }
 
 module.exports = new BusRouteController();

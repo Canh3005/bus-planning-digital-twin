@@ -1,0 +1,100 @@
+/* src/components/Controls/TripResultBox.css */
+.trip-results-box {
+    margin-top: 15px;
+    padding: 15px;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.trip-results-box h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.1em;
+    color: #343a40;
+}
+
+.trip-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.trip-option-card {
+    background-color: #ffffff;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.trip-option-card:hover {
+    background-color: #e9ecef;
+    border-color: #007bff;
+    transform: translateY(-1px);
+}
+
+.trip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.trip-time strong {
+    color: #007bff;
+    font-size: 1.1em;
+}
+
+.trip-type {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: white;
+}
+
+.type-0 { background-color: #28a745; } /* Xanh lá: 0 chuyển */
+.type-1 { background-color: #ffc107; color: #343a40; } /* Vàng: 1 chuyển */
+.type-2 { background-color: #dc3545; } /* Đỏ: 2 chuyển */
+
+.trip-summary {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-bottom: 10px;
+}
+
+.segment-details {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    border-top: 1px dashed #ced4da;
+    padding-top: 8px;
+}
+
+.trip-segment {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.85em;
+}
+
+.route-name {
+    font-weight: bold;
+    color: #495057;
+}
+
+.segment-info {
+    color: #6c757d;
+}
+
+.trip-results-box.loading,
+.trip-results-box.empty {
+    text-align: center;
+    padding: 20px;
+}
+
+.trip-results-box.loading p {
+    color: #007bff;
+    font-weight: bold;
+}

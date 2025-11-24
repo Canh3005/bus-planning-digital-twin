@@ -12,6 +12,7 @@ const apiClient = axios.create({
 
 // API cho Stations
 export const stationAPI = {
+  // ... (Không thay đổi)
   getAll: async () => {
     const response = await apiClient.get('/api/stations');
     return response.data;
@@ -72,6 +73,12 @@ export const routeAPI = {
   
   delete: async (id) => {
     const response = await apiClient.delete(`/api/routes/${id}`);
+    return response.data;
+  },
+  
+  // Phương thức mới: Tìm chuyến đi <--- ĐÃ THÊM
+  findTrip: async (tripData) => {
+    const response = await apiClient.post('/api/routes/find-trip', tripData);
     return response.data;
   },
 };

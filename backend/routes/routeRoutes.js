@@ -7,6 +7,9 @@ const busRouteController = require('../controllers/busRouteController');
 // GET /api/routes/search - Tìm kiếm tuyến xe
 router.get('/search', busRouteController.searchRoutes.bind(busRouteController));
 
+// POST /api/routes/real-path-from-coordinates - Lấy đường đi thật từ OSRM cho một mảng toạ độ
+router.post('/real-path-from-coordinates', busRouteController.getRealPathFromCoordinates.bind(busRouteController));
+
 // GET /api/routes/real-paths - Lấy tuyến xe với đường đi thật từ OSRM
 router.get('/real-paths', busRouteController.getRealRoutePaths.bind(busRouteController));
 

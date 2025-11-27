@@ -27,34 +27,59 @@ const alightStationIcon = new L.Icon({
 const PathSegments = ({ foundPaths }) => {
   const [segmentsWithRealPaths, setSegmentsWithRealPaths] = useState([]);
   const [loading, setLoading] = useState(true);
+  const fetchedPathsRef = React.useRef(null);
 
   useEffect(() => {
     const fetchRealPaths = async () => {
       if (!foundPaths || !foundPaths.paths || foundPaths.paths.length === 0) {
         setSegmentsWithRealPaths([]);
         setLoading(false);
+        fetchedPathsRef.current = null;
         return;
       }
 
-      setLoading(true);
       const bestPath = foundPaths.paths[0];
+      
+      // Kiểm tra nếu đã fetch paths này rồi thì skip
+      const pathKey = JSON.stringify(bestPath.routes.map(r => r.routeId));
+      if (fetchedPathsRef.current === pathKey) {
+        console.log('⏭️ Skipping duplicate fetch for same paths');
+        return;
+      }
+
+      console.log('🔄 Fetching real paths for path segments...');
+      setLoading(true);
+      fetchedPathsRef.current = pathKey;
 
       try {
         // Fetch real paths cho tất cả các routes trong path
         const segmentsWithPaths = await Promise.all(
           bestPath.routes.map(async (segment) => {
-            const routeId = segment.route._id || segment.route.id;
-            try {
-              const routeWithRealPath = await routeAPI.getRealPathById(routeId);
-              console.log(`✅ Fetched real path for segment: ${segment.route.routeName}`);
+            // Sử dụng segment.coordinates để lấy real path
+            const coordinates = segment.coordinates || [];
+            
+            if (coordinates.length < 2) {
+              console.warn(`⚠️ Segment ${segment.routeName} không có đủ coordinates`);
               return {
                 ...segment,
-                route: routeWithRealPath
+                realPath: coordinates
+              };
+            }
+            
+            try {
+              const result = await routeAPI.getRealPathFromCoordinates(coordinates);
+              console.log(`✅ Fetched real path for segment: ${segment.routeName}`);
+              return {
+                ...segment,
+                realPath: result.success ? result.realPath : coordinates
               };
             } catch (error) {
-              console.error(`❌ Error fetching real path for ${segment.route.routeName}:`, error);
-              // Fallback to original route
-              return segment;
+              console.error(`❌ Error fetching real path for ${segment.routeName}:`, error);
+              // Fallback: sử dụng coordinates có sẵn trong segment
+              return {
+                ...segment,
+                realPath: coordinates
+              };
             }
           })
         );
@@ -80,8 +105,9 @@ const PathSegments = ({ foundPaths }) => {
   };
 
   // Hàm lấy đoạn path giữa 2 trạm trên một tuyến
-  const getPathBetweenStations = (route, boardStation, alightStation) => {
-    const routePath = route.realPath || route.routePath?.coordinates || [];
+  const getPathBetweenStations = (segment, boardStation, alightStation) => {
+    // Sử dụng realPath nếu có, nếu không fallback sang coordinates trong segment
+    const routePath = segment.realPath || segment.coordinates || [];
     
     if (routePath.length === 0) {
       // Fallback: vẽ đường thẳng giữa 2 trạm
@@ -93,50 +119,8 @@ const PathSegments = ({ foundPaths }) => {
       return [];
     }
 
-    // Tìm điểm gần nhất với trạm lên và trạm xuống
-    const boardCoords = getStationCoordinates(boardStation);
-    const alightCoords = getStationCoordinates(alightStation);
-
-    if (!boardCoords || !alightCoords) {
-      return [];
-    }
-
-    // Tìm index của điểm gần trạm lên và trạm xuống nhất
-    let boardIndex = 0;
-    let alightIndex = routePath.length - 1;
-    let minBoardDist = Infinity;
-    let minAlightDist = Infinity;
-
-    routePath.forEach((coord, index) => {
-      const lat = coord[1];
-      const lng = coord[0];
-      
-      // Khoảng cách đến trạm lên
-      const distToBoard = Math.sqrt(
-        Math.pow(lat - boardCoords[0], 2) + Math.pow(lng - boardCoords[1], 2)
-      );
-      if (distToBoard < minBoardDist) {
-        minBoardDist = distToBoard;
-        boardIndex = index;
-      }
-
-      // Khoảng cách đến trạm xuống
-      const distToAlight = Math.sqrt(
-        Math.pow(lat - alightCoords[0], 2) + Math.pow(lng - alightCoords[1], 2)
-      );
-      if (distToAlight < minAlightDist) {
-        minAlightDist = distToAlight;
-        alightIndex = index;
-      }
-    });
-
-    // Lấy đoạn path từ boardIndex đến alightIndex
-    if (boardIndex <= alightIndex) {
-      const segment = routePath.slice(boardIndex, alightIndex + 1);
-      return segment.map(coord => [coord[1], coord[0]]); // [lat, lng]
-    }
-
-    return [];
+    // Chuyển đổi coordinates sang [lat, lng] format
+    return routePath.map(coord => [coord[1], coord[0]]);
   };
 
   if (loading) {
@@ -150,11 +134,10 @@ const PathSegments = ({ foundPaths }) => {
   return (
     <>
       {segmentsWithRealPaths.map((segment, segmentIndex) => {
-        const { route, boardStation, alightStation, distance } = segment;
-        const routeName = route.routeName || route.name;
+        const { routeName, boardStation, alightStation, distance } = segment;
         
         // Lấy đoạn path giữa 2 trạm
-        const positions = getPathBetweenStations(route, boardStation, alightStation);
+        const positions = getPathBetweenStations(segment, boardStation, alightStation);
 
         if (positions.length === 0) return null;
 

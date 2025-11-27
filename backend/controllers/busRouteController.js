@@ -87,6 +87,27 @@ class BusRouteController {
     }
 
     /**
+     * POST /api/routes/real-path-from-coordinates - Lấy đường đi thật từ toạ độ
+     */
+    async getRealPathFromCoordinates(req, res) {
+        try {
+            const { coordinates } = req.body;
+            
+            if (!coordinates || !Array.isArray(coordinates) || coordinates.length < 2) {
+                return res.status(400).json({ 
+                    error: 'Coordinates phải là mảng có ít nhất 2 điểm [lng, lat]' 
+                });
+            }
+            
+            const realPath = await busRouteService.getRealPathFromCoordinates(coordinates);
+            res.status(200).json(realPath);
+        } catch (err) {
+            console.error("Lỗi khi lấy đường đi thật:", err);
+            res.status(500).json({ error: "Lỗi máy chủ nội bộ" });
+        }
+    }
+
+    /**
      * GET /api/routes/real-paths - Lấy tất cả tuyến xe với đường đi thật từ OSRM
      */
     async getRealRoutePaths(req, res) {

@@ -136,6 +136,55 @@ class BusRouteService {
     }
 
     /**
+     * Lấy đường đi thật từ OSRM API cho một mảng toạ độ
+     */
+    async getRealPathFromCoordinates(coordinates) {
+        // Kiểm tra input
+        if (!coordinates || !Array.isArray(coordinates) || coordinates.length < 2) {
+            return {
+                success: false,
+                realPath: coordinates || [],
+                message: 'Toạ độ không hợp lệ'
+            };
+        }
+
+        try {
+            // Tạo waypoints từ coordinates [lng, lat]
+            const waypoints = coordinates.map(coord => `${coord[0]},${coord[1]}`).join(';');
+            const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`;
+            
+            console.log(`🔄 Fetching real path for ${coordinates.length} coordinates...`);
+            const response = await axios.get(osrmUrl, { timeout: 10000 });
+            const data = response.data;
+            
+            if (data.code === 'Ok' && data.routes && data.routes[0]) {
+                console.log(`✅ Successfully fetched real path from OSRM`);
+                return {
+                    success: true,
+                    realPath: data.routes[0].geometry.coordinates,
+                    distance: data.routes[0].distance,
+                    duration: data.routes[0].duration
+                };
+            } else {
+                console.warn(`⚠️ OSRM returned no route, using original coordinates`);
+                return {
+                    success: false,
+                    realPath: coordinates,
+                    message: 'OSRM không tìm thấy đường đi'
+                };
+            }
+        } catch (error) {
+            console.error(`❌ Error fetching OSRM route:`, error.message);
+            // Fallback to original coordinates
+            return {
+                success: false,
+                realPath: coordinates,
+                message: error.message
+            };
+        }
+    }
+
+    /**
      * Lấy đường đi thật từ OSRM API cho một route cụ thể
      */
     async getRealRoutePathById(id) {

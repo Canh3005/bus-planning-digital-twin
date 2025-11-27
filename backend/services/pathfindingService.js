@@ -334,11 +334,14 @@ class PathfindingService {
      * @returns {Object} - Thông tin đường đi
      */
     async findShortestPathInMatrix(startLat, startLon, endLat, endLon, maxDistance = 1000) {
+        const startTime = Date.now();
         console.log('🔍 Sử dụng thuật toán Dijkstra để tìm đường đi...');
 
         // Bước 1: Tìm trạm gần điểm bắt đầu và điểm đến
+        const stationFindStart = Date.now();
         const startStation = await this.findNearestStation(startLat, startLon, maxDistance);
         const endStation = await this.findNearestStation(endLat, endLon, maxDistance);
+        console.log(`⏱️ Tìm trạm: ${Date.now() - stationFindStart}ms`);
 
         console.log(`📍 Start station: ${startStation.name}, End station: ${endStation.name}`);
 
@@ -355,21 +358,28 @@ class PathfindingService {
         }
 
         // Bước 2: Lấy tất cả các tuyến và xây dựng đồ thị
+        const routeFetchStart = Date.now();
         const allRoutes = await BusRoute.find({})
             .populate('startStationId', 'name address location')
             .populate('endStationId', 'name address location')
             .populate('stations.stationId', 'name address location');
-
+        console.log(`⏱️ Load routes: ${Date.now() - routeFetchStart}ms`);
         console.log(`🚌 Tổng số tuyến: ${allRoutes.length}`);
 
-        // Bước 3: Xây dựng đồ thị có hướng
+        // Bước 3: Xây dựng station map và đồ thị có hướng
+        const graphBuildStart = Date.now();
+        const stationMap = this.buildStationMap(allRoutes);
         const graph = this.buildDirectedGraph(allRoutes);
-        console.log(`🗺️ Đồ thị có ${Object.keys(graph).length} node`);
+        console.log(`⏱️ Xây dựng đồ thị: ${Date.now() - graphBuildStart}ms`);
+        console.log(`🗺️ Đồ thị có ${Object.keys(graph).length} nodes, ${Object.keys(stationMap).length} stations`);
 
-        // Bước 4: Chạy Dijkstra
-        const result = this.dijkstra(graph, startStation._id.toString(), endStation._id.toString(), allRoutes);
+        // Bước 4: Chạy Dijkstra với min-heap tối ưu
+        const dijkstraStart = Date.now();
+        const result = this.dijkstraOptimized(graph, startStation._id.toString(), endStation._id.toString());
+        console.log(`⏱️ Dijkstra: ${Date.now() - dijkstraStart}ms`);
 
         if (!result.found) {
+            console.log(`⏱️ Tổng thời gian: ${Date.now() - startTime}ms`);
             return {
                 success: false,
                 message: 'Không tìm thấy đường đi phù hợp',
@@ -380,7 +390,10 @@ class PathfindingService {
         }
 
         // Bước 5: Xây dựng lại đường đi từ kết quả Dijkstra
-        const path = this.reconstructPath(result.path, result.routeUsed, allRoutes);
+        const reconstructStart = Date.now();
+        const path = this.reconstructPathOptimized(result.path, result.routeUsed, stationMap, allRoutes);
+        console.log(`⏱️ Reconstruct path: ${Date.now() - reconstructStart}ms`);
+        console.log(`⏱️ Tổng thời gian: ${Date.now() - startTime}ms`);
 
         return {
             success: true,
@@ -388,20 +401,50 @@ class PathfindingService {
             paths: [path],
             startStation,
             endStation,
-            algorithm: 'Dijkstra'
+            algorithm: 'Dijkstra-Optimized'
         };
     }
 
     /**
-     * Xây dựng đồ thị có hướng từ danh sách các tuyến
-     * Graph structure: { stationId: [ { toStation, distance, routeId, route } ] }
+     * Xây dựng station map để truy xuất nhanh O(1)
+     */
+    buildStationMap(allRoutes) {
+        const stationMap = new Map();
+
+        for (const route of allRoutes) {
+            const addToMap = (station) => {
+                if (station && station._id) {
+                    const id = station._id.toString();
+                    if (!stationMap.has(id)) {
+                        stationMap.set(id, station);
+                    }
+                }
+            };
+
+            addToMap(route.startStationId);
+            addToMap(route.endStationId);
+            
+            if (route.stations) {
+                for (const s of route.stations) {
+                    addToMap(s.stationId);
+                }
+            }
+        }
+
+        return stationMap;
+    }
+
+    /**
+     * Xây dựng đồ thị có hướng từ danh sách các tuyến (tối ưu bộ nhớ)
+     * Graph structure: { stationId: [ { toStation, distance, routeId } ] }
      */
     buildDirectedGraph(allRoutes) {
         const graph = {};
 
         for (const route of allRoutes) {
-            // Tạo danh sách tất cả các trạm theo thứ tự trên tuyến
             const orderedStations = this.getOrderedStations(route);
+            const routeId = route._id.toString();
+            const ticketPrice = route.ticketPrice || 7000;
 
             // Tạo các cạnh có hướng giữa các trạm liên tiếp
             for (let i = 0; i < orderedStations.length - 1; i++) {
@@ -419,7 +462,7 @@ class PathfindingService {
                     toStation.location.coordinates[0]
                 );
 
-                // Thêm cạnh vào đồ thị
+                // Thêm cạnh vào đồ thị (chỉ lưu thông tin cần thiết)
                 if (!graph[fromId]) {
                     graph[fromId] = [];
                 }
@@ -427,15 +470,138 @@ class PathfindingService {
                 graph[fromId].push({
                     toStation: toId,
                     distance: distance,
-                    routeId: route._id.toString(),
-                    route: route,
-                    fromStationObj: fromStation,
-                    toStationObj: toStation
+                    routeId: routeId,
+                    ticketPrice: ticketPrice,
+                    fromStationId: fromId,
+                    toStationId: toId
                 });
             }
         }
 
         return graph;
+    }
+
+    /**
+     * Min-Heap implementation cho Priority Queue
+     */
+    createMinHeap() {
+        const heap = [];
+        const indexMap = new Map(); // Track vị trí của mỗi element
+
+        const swap = (i, j) => {
+            [heap[i], heap[j]] = [heap[j], heap[i]];
+            indexMap.set(heap[i].stationId, i);
+            indexMap.set(heap[j].stationId, j);
+        };
+
+        const bubbleUp = (index) => {
+            while (index > 0) {
+                const parentIndex = Math.floor((index - 1) / 2);
+                if (heap[parentIndex].distance <= heap[index].distance) break;
+                swap(parentIndex, index);
+                index = parentIndex;
+            }
+        };
+
+        const bubbleDown = (index) => {
+            while (true) {
+                let smallest = index;
+                const leftChild = 2 * index + 1;
+                const rightChild = 2 * index + 2;
+
+                if (leftChild < heap.length && heap[leftChild].distance < heap[smallest].distance) {
+                    smallest = leftChild;
+                }
+                if (rightChild < heap.length && heap[rightChild].distance < heap[smallest].distance) {
+                    smallest = rightChild;
+                }
+
+                if (smallest === index) break;
+                swap(index, smallest);
+                index = smallest;
+            }
+        };
+
+        return {
+            push: (item) => {
+                heap.push(item);
+                indexMap.set(item.stationId, heap.length - 1);
+                bubbleUp(heap.length - 1);
+            },
+            pop: () => {
+                if (heap.length === 0) return null;
+                const min = heap[0];
+                const last = heap.pop();
+                indexMap.delete(min.stationId);
+                
+                if (heap.length > 0) {
+                    heap[0] = last;
+                    indexMap.set(last.stationId, 0);
+                    bubbleDown(0);
+                }
+                return min;
+            },
+            isEmpty: () => heap.length === 0,
+            size: () => heap.length
+        };
+    }
+
+    /**
+     * Thuật toán Dijkstra tối ưu với min-heap
+     */
+    dijkstraOptimized(graph, startId, endId) {
+        const distances = new Map();
+        const previous = new Map();
+        const routeUsed = new Map();
+        const visited = new Set();
+        const pq = this.createMinHeap();
+
+        // Khởi tạo
+        distances.set(startId, 0);
+        pq.push({ stationId: startId, distance: 0 });
+
+        while (!pq.isEmpty()) {
+            const { stationId: currentId, distance: currentDist } = pq.pop();
+
+            // Đã đến đích
+            if (currentId === endId) {
+                return {
+                    found: true,
+                    distance: distances.get(endId),
+                    path: this.reconstructPathIds(previous, startId, endId),
+                    routeUsed: routeUsed,
+                    transfers: this.countTransfersOptimized(previous, routeUsed, startId, endId)
+                };
+            }
+
+            // Đã visit node này rồi
+            if (visited.has(currentId)) continue;
+            visited.add(currentId);
+
+            // Không có cạnh đi từ node này
+            if (!graph[currentId]) continue;
+
+            // Duyệt các node kề
+            for (const edge of graph[currentId]) {
+                const { toStation, distance, routeId, ticketPrice } = edge;
+
+                if (visited.has(toStation)) continue;
+
+                const newDist = currentDist + distance;
+                const currentBest = distances.get(toStation);
+
+                // Tìm thấy đường đi ngắn hơn
+                if (currentBest === undefined || newDist < currentBest) {
+                    distances.set(toStation, newDist);
+                    previous.set(toStation, currentId);
+                    routeUsed.set(toStation, { routeId, ticketPrice, edge });
+                    pq.push({ stationId: toStation, distance: newDist });
+                }
+            }
+        }
+
+        // Không tìm thấy đường đi
+        return { found: false };
     }
 
     /**
@@ -523,7 +689,7 @@ class PathfindingService {
     }
 
     /**
-     * Xây dựng lại danh sách ID các trạm từ previous
+     * Xây dựng lại danh sách ID các trạm từ previous (tối ưu với Map)
      */
     reconstructPathIds(previous, startId, endId) {
         const path = [];
@@ -531,7 +697,7 @@ class PathfindingService {
 
         while (current !== startId) {
             path.unshift(current);
-            current = previous[current];
+            current = previous.get(current);
             if (!current) return []; // Không tìm thấy đường đi
         }
 
@@ -540,9 +706,39 @@ class PathfindingService {
     }
 
     /**
-     * Đếm số lần chuyển tuyến
+     * Trích xuất phần của route giữa boardStation và alightStation
      */
-    countTransfers(previous, routeUsed, startId, endId) {
+    extractRouteSegment(route, boardStationId, alightStationId) {
+        const boardOrder = this.getStationOrderInRoute(boardStationId, route);
+        const alightOrder = this.getStationOrderInRoute(alightStationId, route);
+        
+        if (boardOrder === -1 || alightOrder === -1) {
+            return {
+                coordinates: [],
+                stations: []
+            };
+        }
+        
+        // Lấy stations trong khoảng
+        const segmentStations = [];
+        const segmentCoordinates = [];
+        for (const station of route.stations) {
+            if (station.order >= boardOrder && station.order <= alightOrder) {
+                segmentStations.push(station);
+                segmentCoordinates.push(station.stationId.location.coordinates);
+            }
+        }
+        
+        return {
+            coordinates: segmentCoordinates,
+            stations: segmentStations
+        };
+    }
+
+    /**
+     * Đếm số lần chuyển tuyến (tối ưu với Map)
+     */
+    countTransfersOptimized(previous, routeUsed, startId, endId) {
         const path = this.reconstructPathIds(previous, startId, endId);
         if (path.length <= 1) return 0;
 
@@ -551,7 +747,7 @@ class PathfindingService {
 
         for (let i = 1; i < path.length; i++) {
             const stationId = path[i];
-            const usedRoute = routeUsed[stationId];
+            const usedRoute = routeUsed.get(stationId);
 
             if (usedRoute) {
                 if (currentRouteId && currentRouteId !== usedRoute.routeId) {
@@ -565,9 +761,9 @@ class PathfindingService {
     }
 
     /**
-     * Xây dựng lại đường đi chi tiết từ kết quả Dijkstra
+     * Xây dựng lại đường đi chi tiết từ kết quả Dijkstra (tối ưu với stationMap)
      */
-    reconstructPath(pathIds, routeUsed, allRoutes) {
+    reconstructPathOptimized(pathIds, routeUsed, stationMap, allRoutes) {
         if (pathIds.length <= 1) {
             return {
                 routes: [],
@@ -577,62 +773,77 @@ class PathfindingService {
             };
         }
 
+        // Tạo route map để truy xuất nhanh
+        const routeMap = new Map();
+        for (const route of allRoutes) {
+            routeMap.set(route._id.toString(), route);
+        }
+
         const segments = [];
         let currentRouteId = null;
-        let boardStation = null;
-        let totalDistance = 0;
+        let boardStationId = null;
+        let segmentDistance = 0;
         let totalCost = 0;
 
         for (let i = 1; i < pathIds.length; i++) {
             const stationId = pathIds[i];
-            const usedRoute = routeUsed[stationId];
+            const usedRoute = routeUsed.get(stationId);
 
             if (!usedRoute) continue;
 
-            const { routeId, route, edge } = usedRoute;
+            const { routeId, ticketPrice, edge } = usedRoute;
 
             // Bắt đầu segment mới hoặc tiếp tục segment hiện tại
             if (currentRouteId === routeId) {
                 // Cùng tuyến, tiếp tục
-                totalDistance += edge.distance;
+                segmentDistance += edge.distance;
             } else {
                 // Chuyển tuyến hoặc segment đầu tiên
-                if (currentRouteId !== null && boardStation) {
+                if (currentRouteId !== null && boardStationId) {
                     // Lưu segment trước đó
                     const prevStationId = pathIds[i - 1];
-                    const prevStation = this.findStationById(prevStationId, allRoutes);
+                    const route = routeMap.get(currentRouteId);
+                    const routeSegment = this.extractRouteSegment(route, boardStationId, prevStationId);
                     
                     segments.push({
-                        route: route,
-                        boardStation: boardStation,
-                        alightStation: prevStation,
-                        distance: totalDistance
+                        routeId: currentRouteId,
+                        routeName: route.routeName,
+                        ticketPrice: route.ticketPrice,
+                        coordinates: routeSegment.coordinates,
+                        stations: routeSegment.stations,
+                        boardStation: stationMap.get(boardStationId),
+                        alightStation: stationMap.get(prevStationId),
+                        distance: segmentDistance
                     });
 
-                    totalCost += route.ticketPrice || 7000;
+                    totalCost += routeUsed.get(prevStationId).ticketPrice;
                 }
 
                 // Bắt đầu segment mới
                 currentRouteId = routeId;
-                boardStation = edge.fromStationObj;
-                totalDistance = edge.distance;
+                boardStationId = edge.fromStationId;
+                segmentDistance = edge.distance;
             }
         }
 
         // Thêm segment cuối cùng
-        if (boardStation && currentRouteId) {
+        if (boardStationId && currentRouteId) {
             const lastStationId = pathIds[pathIds.length - 1];
-            const lastStation = this.findStationById(lastStationId, allRoutes);
-            const lastRoute = routeUsed[lastStationId].route;
+            const route = routeMap.get(currentRouteId);
+            const routeSegment = this.extractRouteSegment(route, boardStationId, lastStationId);
 
             segments.push({
-                route: lastRoute,
-                boardStation: boardStation,
-                alightStation: lastStation,
-                distance: totalDistance
+                routeId: currentRouteId,
+                routeName: route.routeName,
+                ticketPrice: route.ticketPrice,
+                coordinates: routeSegment.coordinates,
+                stations: routeSegment.stations,
+                boardStation: stationMap.get(boardStationId),
+                alightStation: stationMap.get(lastStationId),
+                distance: segmentDistance
             });
 
-            totalCost += lastRoute.ticketPrice || 7000;
+            totalCost += routeUsed.get(lastStationId).ticketPrice;
         }
 
         return {
@@ -641,26 +852,6 @@ class PathfindingService {
             totalCost: totalCost,
             transfers: segments.length - 1
         };
-    }
-
-    /**
-     * Tìm station object từ ID
-     */
-    findStationById(stationId, allRoutes) {
-        for (const route of allRoutes) {
-            if (route.startStationId._id.toString() === stationId) {
-                return route.startStationId;
-            }
-            if (route.endStationId._id.toString() === stationId) {
-                return route.endStationId;
-            }
-            for (const s of route.stations) {
-                if (s.stationId && s.stationId._id.toString() === stationId) {
-                    return s.stationId;
-                }
-            }
-        }
-        return null;
     }
 }
 

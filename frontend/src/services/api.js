@@ -68,6 +68,13 @@ export const routeAPI = {
     const response = await apiClient.get(`/api/routes/${id}/real-path`);
     return response.data;
   },
+
+  getRealPathFromCoordinates: async (coordinates) => {
+    const response = await apiClient.post('/api/routes/real-path-from-coordinates', {
+      coordinates
+    });
+    return response.data;
+  },
   
   getById: async (id) => {
     const response = await apiClient.get(`/api/routes/${id}`);

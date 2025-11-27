@@ -38,7 +38,8 @@ const TripResult = ({ foundPaths, onClose }) => {
       <div className="trip-routes">
         <h4>📋 Chi Tiết Hành Trình</h4>
         {routes.map((segment, index) => {
-          const routeName = segment.route.routeName || segment.route.name;
+          // Bây giờ segment có routeName trực tiếp
+          const routeName = segment.routeName;
           const boardStationName = segment.boardStation.name;
           const alightStationName = segment.alightStation.name;
           const segmentColor = ROUTE_COLORS.PATH_SEGMENTS[index % ROUTE_COLORS.PATH_SEGMENTS.length];

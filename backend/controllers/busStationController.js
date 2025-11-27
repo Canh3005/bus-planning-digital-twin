@@ -26,8 +26,7 @@ class BusStationController {
      */
     async getAllStations(req, res) {
         try {
-            const { searchText } = req.query;
-            const stations = await busStationService.getAllStations({ searchText });
+            const stations = await busStationService.getAllStations();
             res.status(200).json(stations);
         } catch (err) {
             console.error("Lỗi khi lấy trạm xe:", err);

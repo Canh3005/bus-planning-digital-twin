@@ -1,5 +1,6 @@
 // src/components/Admin/StationTable.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import AddStationModal from './AddStationModal';
 import EditStationModal from './EditStationModal';
 import { stationAPI } from '../../services/api';
@@ -9,6 +10,43 @@ const StationTable = ({ stations, loading, onRefetch }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedStation, setSelectedStation] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('searchText') || '');
+  const [filteredStations, setFilteredStations] = useState(stations || []);
+  const [, setIsSearching] = useState(false);
+
+  // useEffect to call API when searchTerm changes
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (searchTerm.trim()) {
+        setIsSearching(true);
+        try {
+          const results = await stationAPI.search(searchTerm);
+          setFilteredStations(results);
+          // Update URL with search query
+          setSearchParams({ searchText: searchTerm });
+        } catch (error) {
+          console.error('Error searching stations:', error);
+          setFilteredStations([]);
+        } finally {
+          setIsSearching(false);
+        }
+      } else {
+        setFilteredStations(stations || []);
+        // Remove search query from URL
+        setSearchParams({});
+      }
+    }, 500); // Debounce 500ms
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm, stations, setSearchParams]);
+
+  // Update filtered stations when stations prop changes
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredStations(stations || []);
+    }
+  }, [stations, searchTerm]);
 
   const handleAddSuccess = (newStation) => {
     setIsAddModalOpen(false);
@@ -78,10 +116,19 @@ const StationTable = ({ stations, loading, onRefetch }) => {
     <>
       <div className="table-container">
         <div className="table-header">
-          <h3>Danh sách trạm xe ({stations.length})</h3>
-          <button className="btn-add" onClick={() => setIsAddModalOpen(true)}>
-            <span>➕</span> Thêm Trạm Mới
-          </button>
+          <h3>Danh sách trạm xe ({filteredStations.length}/{stations.length})</h3>
+          <div className="header-actions">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="🔍 Tìm kiếm trạm..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <button className="btn-add" onClick={() => setIsAddModalOpen(true)}>
+              <span>➕</span> Thêm Trạm Mới
+            </button>
+          </div>
         </div>
 
         <div className="table-wrapper">
@@ -96,7 +143,14 @@ const StationTable = ({ stations, loading, onRefetch }) => {
               </tr>
             </thead>
             <tbody>
-              {stations.map((station) => {
+              {filteredStations.length === 0 ? (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: '#999' }}>
+                    Không tìm thấy trạm nào phù hợp với "{searchTerm}"
+                  </td>
+                </tr>
+              ) : (
+                filteredStations.map((station) => {
                 const stationId = station._id || station.id;
                 const coords = station.location?.coordinates || [0, 0];
                 return (
@@ -129,7 +183,8 @@ const StationTable = ({ stations, loading, onRefetch }) => {
                     </td>
                   </tr>
                 );
-              })}
+              })
+              )}
             </tbody>
           </table>
         </div>

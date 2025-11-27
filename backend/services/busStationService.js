@@ -3,10 +3,29 @@ const BusStation = require('../models/BusStation');
 
 class BusStationService {
     /**
+     * Tìm kiếm trạm xe theo từ khóa
+     */
+    async searchStations(searchText) {
+        const searchRegex = { $regex: searchText.trim(), $options: 'i' };
+        
+        return await BusStation.find({
+            $or: [
+                { name: searchRegex },
+                { address: searchRegex },
+                { description: searchRegex }
+            ]
+        }).sort({ name: 1 });
+    }
+
+    /**
      * Lấy tất cả trạm xe
      */
-    async getAllStations() {
-        return await BusStation.find({}).sort({ createdAt: -1 });
+    async getAllStations({ searchText }) {
+        const query = {};
+        if (searchText) {
+            query.name = { $regex: searchText, $options: 'i' };
+        }
+        return await BusStation.find(query).sort({ createdAt: -1 });
     }
 
     /**

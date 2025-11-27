@@ -3,11 +3,31 @@ const busStationService = require('../services/busStationService');
 
 class BusStationController {
     /**
+     * GET /api/stations/search - Tìm kiếm trạm xe
+     */
+    async searchStations(req, res) {
+        try {
+            const { searchText } = req.query;
+            
+            if (!searchText || searchText.trim() === '') {
+                return res.status(200).json([]);
+            }
+            
+            const stations = await busStationService.searchStations(searchText);
+            res.status(200).json(stations);
+        } catch (err) {
+            console.error("Lỗi khi tìm kiếm trạm xe:", err);
+            res.status(500).json({ error: "Lỗi máy chủ nội bộ" });
+        }
+    }
+
+    /**
      * GET /api/stations - Lấy tất cả trạm xe
      */
     async getAllStations(req, res) {
         try {
-            const stations = await busStationService.getAllStations();
+            const { searchText } = req.query;
+            const stations = await busStationService.getAllStations({ searchText });
             res.status(200).json(stations);
         } catch (err) {
             console.error("Lỗi khi lấy trạm xe:", err);

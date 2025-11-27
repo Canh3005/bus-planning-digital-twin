@@ -3,6 +3,25 @@ const busRouteService = require('../services/busRouteService');
 
 class BusRouteController {
     /**
+     * GET /api/routes/search - Tìm kiếm tuyến xe
+     */
+    async searchRoutes(req, res) {
+        try {
+            const { searchText } = req.query;
+            
+            if (!searchText || searchText.trim() === '') {
+                return res.status(200).json([]);
+            }
+            
+            const routes = await busRouteService.searchRoutes(searchText);
+            res.status(200).json(routes);
+        } catch (err) {
+            console.error("Lỗi khi tìm kiếm tuyến xe:", err);
+            res.status(500).json({ error: "Lỗi máy chủ nội bộ" });
+        }
+    }
+
+    /**
      * GET /api/routes - Lấy tất cả tuyến xe
      */
     async getAllRoutes(req, res) {

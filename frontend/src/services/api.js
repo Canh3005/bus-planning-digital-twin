@@ -17,6 +17,13 @@ export const stationAPI = {
     return response.data;
   },
   
+  search: async (searchText) => {
+    const response = await apiClient.get('/api/stations/search', {
+      params: { searchText }
+    });
+    return response.data;
+  },
+  
   getById: async (id) => {
     const response = await apiClient.get(`/api/stations/${id}`);
     return response.data;
@@ -42,6 +49,13 @@ export const stationAPI = {
 export const routeAPI = {
   getAll: async () => {
     const response = await apiClient.get('/api/routes');
+    return response.data;
+  },
+
+  search: async (searchText) => {
+    const response = await apiClient.get('/api/routes/search', {
+      params: { searchText }
+    });
     return response.data;
   },
 

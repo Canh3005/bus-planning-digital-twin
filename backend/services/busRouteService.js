@@ -4,6 +4,26 @@ const axios = require('axios');
 
 class BusRouteService {
     /**
+     * Tìm kiếm tuyến xe theo từ khóa
+     */
+    async searchRoutes(searchText) {
+        const searchRegex = { $regex: searchText.trim(), $options: 'i' };
+        
+        const routes = await BusRoute.find({
+            $or: [
+                { routeName: searchRegex },
+                { description: searchRegex }
+            ]
+        })
+        .populate('startStationId', 'name address location')
+        .populate('endStationId', 'name address location')
+        .populate('stations.stationId', 'name address location')
+        .sort({ routeName: 1 });
+        
+        return routes;
+    }
+
+    /**
      * Lấy tất cả tuyến xe
      */
     async getAllRoutes() {

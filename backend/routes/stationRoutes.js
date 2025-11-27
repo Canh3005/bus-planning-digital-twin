@@ -3,6 +3,9 @@ const express = require('express');
 const router = express.Router();
 const busStationController = require('../controllers/busStationController');
 
+// GET /api/stations/search - Tìm kiếm trạm xe (MUST be before /:id)
+router.get('/search', busStationController.searchStations.bind(busStationController));
+
 // GET /api/stations - Lấy tất cả trạm xe
 router.get('/', busStationController.getAllStations.bind(busStationController));
 

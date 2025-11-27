@@ -1,5 +1,6 @@
 // src/components/Admin/RouteTable.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import AddRouteModal from './AddRouteModal';
 import EditRouteModal from './EditRouteModal';
 import ViewRouteModal from './ViewRouteModal';
@@ -11,6 +12,43 @@ const RouteTable = ({ routes, loading, onRefetch, allStations }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('searchText') || '');
+  const [filteredRoutes, setFilteredRoutes] = useState(routes || []);
+  const [, setIsSearching] = useState(false);
+
+  // useEffect to call API when searchTerm changes
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (searchTerm.trim()) {
+        setIsSearching(true);
+        try {
+          const results = await routeAPI.search(searchTerm);
+          setFilteredRoutes(results);
+          // Update URL with search query
+          setSearchParams({ searchText: searchTerm });
+        } catch (error) {
+          console.error('Error searching routes:', error);
+          setFilteredRoutes([]);
+        } finally {
+          setIsSearching(false);
+        }
+      } else {
+        setFilteredRoutes(routes || []);
+        // Remove search query from URL
+        setSearchParams({});
+      }
+    }, 500); // Debounce 500ms
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm, routes, setSearchParams]);
+
+  // Update filtered routes when routes prop changes
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredRoutes(routes || []);
+    }
+  }, [routes, searchTerm]);
 
   const handleAddSuccess = (newRoute) => {
     console.log('New route created:', newRoute);
@@ -85,10 +123,19 @@ const RouteTable = ({ routes, loading, onRefetch, allStations }) => {
   return (
     <div className="table-container">
       <div className="table-header">
-        <h3>Danh sách tuyến xe ({routes.length})</h3>
-        <button className="btn-add" onClick={() => setIsAddModalOpen(true)}>
-          <span>➕</span> Thêm Tuyến Mới
-        </button>
+        <h3>Danh sách tuyến xe ({filteredRoutes.length}/{routes.length})</h3>
+        <div className="header-actions">
+          <input
+            type="text"
+            className="search-input"
+            placeholder="🔍 Tìm kiếm tuyến..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <button className="btn-add" onClick={() => setIsAddModalOpen(true)}>
+            <span>➕</span> Thêm Tuyến Mới
+          </button>
+        </div>
       </div>
 
       <div className="table-wrapper">
@@ -104,7 +151,14 @@ const RouteTable = ({ routes, loading, onRefetch, allStations }) => {
             </tr>
           </thead>
           <tbody>
-            {routes.map((route) => {
+            {filteredRoutes.length === 0 ? (
+              <tr>
+                <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: '#999' }}>
+                  Không tìm thấy tuyến nào phù hợp với "{searchTerm}"
+                </td>
+              </tr>
+            ) : (
+              filteredRoutes.map((route) => {
               // Xử lý cấu trúc dữ liệu MongoDB
               const routeId = route._id || route.id;
               const routeName = route.routeName || route.name;
@@ -150,7 +204,8 @@ const RouteTable = ({ routes, loading, onRefetch, allStations }) => {
                   </td>
                 </tr>
               );
-            })}
+            })
+            )}
           </tbody>
         </table>
       </div>

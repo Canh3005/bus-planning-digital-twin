@@ -4,6 +4,9 @@ const router = express.Router();
 const busRouteController = require('../controllers/busRouteController');
 
 // IMPORTANT: Specific routes MUST come before parameterized routes
+// GET /api/routes/search - Tìm kiếm tuyến xe
+router.get('/search', busRouteController.searchRoutes.bind(busRouteController));
+
 // GET /api/routes/real-paths - Lấy tuyến xe với đường đi thật từ OSRM
 router.get('/real-paths', busRouteController.getRealRoutePaths.bind(busRouteController));
 

@@ -20,12 +20,8 @@ class BusStationService {
     /**
      * Lấy tất cả trạm xe
      */
-    async getAllStations({ searchText }) {
-        const query = {};
-        if (searchText) {
-            query.name = { $regex: searchText, $options: 'i' };
-        }
-        return await BusStation.find(query).sort({ createdAt: -1 });
+    async getAllStations() {
+        return await BusStation.find({}).sort({ createdAt: -1 });
     }
 
     /**

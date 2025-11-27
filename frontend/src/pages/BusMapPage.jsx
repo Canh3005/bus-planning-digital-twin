@@ -132,7 +132,8 @@ const BusMapPage = () => {
         setFoundPaths(result);
         
         const bestPath = result.paths[0];
-        const routeIds = bestPath.routes.map(r => r.route._id || r.route.id);
+        // Bây giờ segment có routeId thay vì route object
+        const routeIds = bestPath.routes.map(r => r.routeId);
         
         // Hiển thị tuyến đầu tiên
         if (routeIds.length > 0) {

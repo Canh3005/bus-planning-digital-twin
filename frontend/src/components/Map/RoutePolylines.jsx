@@ -136,26 +136,44 @@ const RoutePolylines = ({ routes, highlightedRouteId, foundPaths }) => {
 
   return (
     <>
+      {/* Hiển thị path segments tìm được */}
+      {foundPaths && foundPaths.paths && foundPaths.paths.length > 0 && (
+        foundPaths.paths[0].routes.map((segment, segmentIndex) => {
+          // Mỗi segment có coordinates và stations riêng
+          const coordinates = segment.coordinates || [];
+          const positions = coordinates.map(coord => [coord[1], coord[0]]);
+          
+          if (positions.length === 0) return null;
+          
+          const segmentColor = ROUTE_COLORS.PATH_SEGMENTS[segmentIndex % ROUTE_COLORS.PATH_SEGMENTS.length];
+          
+          return (
+            <Polyline
+              key={`path-segment-${segmentIndex}`}
+              positions={positions}
+              color={segmentColor}
+              weight={8}
+              opacity={1}
+              smoothFactor={1}
+              className="route-path-segment"
+            >
+              <Popup>
+                <b>🚌 Segment {segmentIndex + 1}</b><br/>
+                Tuyến: <b>{segment.routeName}</b><br/>
+                Lên xe: {segment.boardStation.name}<br/>
+                Xuống xe: {segment.alightStation.name}<br/>
+                Khoảng cách: {segment.distance.toFixed(2)} km<br/>
+              </Popup>
+            </Polyline>
+          );
+        })
+      )}
+      
+      {/* Hiển thị các route thông thường */}
       {routesWithRealPaths.map((route, index) => {
         const routeId = route._id || route.id;
         const isHighlight = highlightedRouteId === routeId;
         const coordinates = route.realPath || [];
-        
-        // Kiểm tra xem route này có phải là segment trong path tìm được không
-        let isPathSegment = false;
-        let segmentIndex = -1;
-        let segmentInfo = null;
-        
-        if (foundPaths && foundPaths.paths && foundPaths.paths.length > 0) {
-          const bestPath = foundPaths.paths[0];
-          segmentIndex = bestPath.routes.findIndex(seg => 
-            (seg.route._id || seg.route.id) === routeId
-          );
-          if (segmentIndex >= 0) {
-            isPathSegment = true;
-            segmentInfo = bestPath.routes[segmentIndex];
-          }
-        }
         
         // Chuyển đổi [lng, lat] sang [lat, lng] cho Leaflet
         const positions = coordinates.map(coord => [coord[1], coord[0]]);
@@ -166,26 +184,11 @@ const RoutePolylines = ({ routes, highlightedRouteId, foundPaths }) => {
         const startStation = route.startStationId?.name || route.start || 'N/A';
         const endStation = route.endStationId?.name || route.end || 'N/A';
         
-        // Chọn màu dựa trên loại route
-        let color, weight, opacity, dashArray;
-        
-        if (isPathSegment) {
-          // Màu cho các segment trong path tìm được
-          color = segmentIndex === 0 ? ROUTE_COLORS.PATH_SEGMENT_1 : ROUTE_COLORS.PATH_SEGMENT_2;
-          weight = 8;
-          opacity = 1;
-          dashArray = null;
-        } else if (isHighlight) {
-          color = ROUTE_COLORS.HIGHLIGHT;
-          weight = 10;
-          opacity = 0.9;
-          dashArray = '12, 6';
-        } else {
-          color = ROUTE_COLORS.DEFAULT;
-          weight = 6;
-          opacity = 0.9;
-          dashArray = null;
-        }
+        // Chọn màu dựa trên highlight
+        const color = isHighlight ? ROUTE_COLORS.HIGHLIGHT : ROUTE_COLORS.DEFAULT;
+        const weight = isHighlight ? 10 : 6;
+        const opacity = isHighlight ? 0.9 : 0.7;
+        const dashArray = isHighlight ? '12, 6' : null;
         
         return (
           <Polyline
@@ -196,18 +199,9 @@ const RoutePolylines = ({ routes, highlightedRouteId, foundPaths }) => {
             opacity={opacity}
             dashArray={dashArray}
             smoothFactor={1}
-            className={isPathSegment ? 'route-path-segment' : (isHighlight ? 'route-highlight' : 'route-normal')}
+            className={isHighlight ? 'route-highlight' : 'route-normal'}
           >
             <Popup>
-              {isPathSegment && (
-                <>
-                  <b>🚌 Segment {segmentIndex + 1}</b><br/>
-                  Lên xe: {segmentInfo.boardStation.name}<br/>
-                  Xuống xe: {segmentInfo.alightStation.name}<br/>
-                  Khoảng cách: {segmentInfo.distance.toFixed(2)} km<br/>
-                  <hr style={{margin: '5px 0'}} />
-                </>
-              )}
               Tuyến: <b>{routeName}</b> <br/>
               Từ: {startStation} → Đến: {endStation}
               <br/><small>✅ Đường đi thật trên bản đồ</small>

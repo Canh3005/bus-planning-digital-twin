@@ -706,6 +706,36 @@ class PathfindingService {
     }
 
     /**
+     * Trích xuất phần của route giữa boardStation và alightStation
+     */
+    extractRouteSegment(route, boardStationId, alightStationId) {
+        const boardOrder = this.getStationOrderInRoute(boardStationId, route);
+        const alightOrder = this.getStationOrderInRoute(alightStationId, route);
+        
+        if (boardOrder === -1 || alightOrder === -1) {
+            return {
+                coordinates: [],
+                stations: []
+            };
+        }
+        
+        // Lấy stations trong khoảng
+        const segmentStations = [];
+        const segmentCoordinates = [];
+        for (const station of route.stations) {
+            if (station.order >= boardOrder && station.order <= alightOrder) {
+                segmentStations.push(station);
+                segmentCoordinates.push(station.stationId.location.coordinates);
+            }
+        }
+        
+        return {
+            coordinates: segmentCoordinates,
+            stations: segmentStations
+        };
+    }
+
+    /**
      * Đếm số lần chuyển tuyến (tối ưu với Map)
      */
     countTransfersOptimized(previous, routeUsed, startId, endId) {
@@ -773,9 +803,14 @@ class PathfindingService {
                     // Lưu segment trước đó
                     const prevStationId = pathIds[i - 1];
                     const route = routeMap.get(currentRouteId);
+                    const routeSegment = this.extractRouteSegment(route, boardStationId, prevStationId);
                     
                     segments.push({
-                        route: route,
+                        routeId: currentRouteId,
+                        routeName: route.routeName,
+                        ticketPrice: route.ticketPrice,
+                        coordinates: routeSegment.coordinates,
+                        stations: routeSegment.stations,
                         boardStation: stationMap.get(boardStationId),
                         alightStation: stationMap.get(prevStationId),
                         distance: segmentDistance
@@ -795,9 +830,14 @@ class PathfindingService {
         if (boardStationId && currentRouteId) {
             const lastStationId = pathIds[pathIds.length - 1];
             const route = routeMap.get(currentRouteId);
+            const routeSegment = this.extractRouteSegment(route, boardStationId, lastStationId);
 
             segments.push({
-                route: route,
+                routeId: currentRouteId,
+                routeName: route.routeName,
+                ticketPrice: route.ticketPrice,
+                coordinates: routeSegment.coordinates,
+                stations: routeSegment.stations,
                 boardStation: stationMap.get(boardStationId),
                 alightStation: stationMap.get(lastStationId),
                 distance: segmentDistance

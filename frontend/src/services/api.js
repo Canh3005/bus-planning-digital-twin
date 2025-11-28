@@ -151,6 +151,19 @@ export const authAPI = {
   },
 };
 
+// API cho Payment
+export const paymentAPI = {
+  createPaymentUrl: async (amount, orderDescription = 'Thanh toan ve xe buyt') => {
+    const response = await apiClient.post('/api/payment/create_payment_url', {
+      amount,
+      orderDescription,
+      orderType: 'billpayment',
+      language: 'vn'
+    });
+    return response.data;
+  },
+};
+
 // Interceptor để tự động thêm token vào headers
 apiClient.interceptors.request.use(
   (config) => {

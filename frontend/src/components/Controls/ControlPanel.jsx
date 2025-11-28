@@ -15,6 +15,7 @@ const ControlPanel = ({
   isLoadingLocation,
   isSearching,
   tripCost,
+  isPaid,
   selectedRouteId,
   hideOtherStations,
   foundPaths,
@@ -53,7 +54,7 @@ const ControlPanel = ({
       
       <TripResult foundPaths={foundPaths} onClose={onCloseTripResult} />
       
-      <CheckoutBox tripCost={tripCost} onCheckout={onCheckout} />
+      <CheckoutBox tripCost={tripCost} isPaid={isPaid} onCheckout={onCheckout} />
       
       <RouteFilter
         routes={routes}

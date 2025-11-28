@@ -1,12 +1,12 @@
 // src/pages/BusMapPage.jsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import MapView from '../components/Map/MapView';
 import ControlPanel from '../components/Controls/ControlPanel';
 import UserMenu from '../components/UserMenu';
 import { useStations } from '../hooks/useStations';
 import { useRoutes } from '../hooks/useRoutes';
 import { useGeolocation } from '../hooks/useGeolocation';
-import { pathfindingAPI } from '../services/api';
+import { pathfindingAPI, paymentAPI } from '../services/api';
 import './BusMapPage.css';
 
 const BusMapPage = () => {
@@ -24,6 +24,50 @@ const BusMapPage = () => {
   const [manualStartLocation, setManualStartLocation] = useState(null); // Vị trí chọn từ search
   const [foundPaths, setFoundPaths] = useState(null); // Lưu kết quả tìm đường
   const [isSearching, setIsSearching] = useState(false);
+  const [isPaid, setIsPaid] = useState(false); // Trạng thái thanh toán
+
+  // Kiểm tra payment result từ localStorage khi component mount
+  useEffect(() => {
+    const paymentData = localStorage.getItem('paymentResult');
+    const tripData = localStorage.getItem('tripData');
+    
+    // Restore payment status
+    if (paymentData) {
+      try {
+        const parsed = JSON.parse(paymentData);
+        if (parsed.isPaid) {
+          setIsPaid(true);
+          console.log('✅ Thanh toán đã hoàn tất:', parsed);
+          
+          // Xóa payment result sau khi đọc
+          localStorage.removeItem('paymentResult');
+        }
+      } catch (error) {
+        console.error('Lỗi parse payment result:', error);
+      }
+    }
+
+    // Restore trip search data
+    if (tripData) {
+      try {
+        const parsed = JSON.parse(tripData);
+        setStartStationName(parsed.startStationName || '');
+        setDestinationName(parsed.destinationName || '');
+        setManualStartLocation(parsed.manualStartLocation || null);
+        setDestinationLocation(parsed.destinationLocation || null);
+        setFoundPaths(parsed.foundPaths || null);
+        setFoundTripRouteId(parsed.foundTripRouteId || null);
+        setTripCost(parsed.tripCost || null);
+        
+        console.log('🔄 Đã khôi phục thông tin tìm kiếm:', parsed);
+        
+        // Xóa trip data sau khi restore
+        localStorage.removeItem('tripData');
+      } catch (error) {
+        console.error('Lỗi parse trip data:', error);
+      }
+    }
+  }, []);
 
   // Handler: Đóng kết quả tìm kiếm
   const handleCloseTripResult = () => {
@@ -64,6 +108,7 @@ const BusMapPage = () => {
     setTripCost(null);
     setFoundPaths(null);
     setIsSearching(true);
+    setIsPaid(false); // Reset trạng thái thanh toán khi tìm chuyến mới
 
     try {
       // Xác định tọa độ điểm bắt đầu
@@ -153,22 +198,42 @@ const BusMapPage = () => {
   }, [startStationName, destinationName, currentLocation, manualStartLocation, destinationLocation, stations]);
 
   // Handler: Thanh toán
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (!foundTripRouteId || !tripCost) {
       alert('Vui lòng tìm chuyến xe trước khi thanh toán.');
       return;
     }
 
-    alert(`Thanh toán ${tripCost.toLocaleString()} VND thành công! Chúc bạn có chuyến đi vui vẻ.`);
+    try {
+      // Lưu thông tin tìm kiếm vào localStorage trước khi redirect
+      const tripData = {
+        startStationName,
+        destinationName,
+        manualStartLocation,
+        destinationLocation,
+        foundPaths,
+        foundTripRouteId,
+        tripCost,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('tripData', JSON.stringify(tripData));
+      
+      // Gọi API tạo URL thanh toán VNPay
+      const result = await paymentAPI.createPaymentUrl(
+        tripCost,
+        `Thanh toán vé xe buýt - ${tripCost.toLocaleString()} VND`
+      );
 
-    // Reset state
-    setFoundTripRouteId(null);
-    setTripCost(null);
-    setStartStationName('');
-    setDestinationName('');
-    clearLocation();
-    setDestinationLocation(null);
-    setManualStartLocation(null);
+      if (result.success && result.paymentUrl) {
+        // Redirect đến trang thanh toán VNPay
+        window.location.href = result.paymentUrl;
+      } else {
+        alert('Lỗi khi tạo thanh toán. Vui lòng thử lại.');
+      }
+    } catch (error) {
+      console.error('❌ Lỗi thanh toán:', error);
+      alert('Lỗi khi tạo thanh toán. Vui lòng thử lại.');
+    }
   };
 
   // Handler: Lọc tuyến
@@ -208,6 +273,7 @@ const BusMapPage = () => {
         isLoadingLocation={isLoadingLocation}
         isSearching={isSearching}
         tripCost={tripCost}
+        isPaid={isPaid}
         selectedRouteId={selectedRouteId}
         hideOtherStations={hideOtherStations}
         foundPaths={foundPaths}

@@ -2,7 +2,7 @@
 import React from 'react';
 import './CheckoutBox.css';
 
-const CheckoutBox = ({ tripCost, onCheckout }) => {
+const CheckoutBox = ({ tripCost, isPaid, onCheckout }) => {
   if (!tripCost) return null;
   
   return (
@@ -10,8 +10,12 @@ const CheckoutBox = ({ tripCost, onCheckout }) => {
       <p>
         Giá vé: <b>{tripCost.toLocaleString()} VND</b>
       </p>
-      <button onClick={onCheckout} className="btn-checkout">
-        💳 THANH TOÁN & ĐI
+      <button 
+        onClick={onCheckout} 
+        className={`btn-checkout ${isPaid ? 'paid' : ''}`}
+        disabled={isPaid}
+      >
+        {isPaid ? '✅ Đã thanh toán' : '💳 Thanh toán & Đi'}
       </button>
     </div>
   );

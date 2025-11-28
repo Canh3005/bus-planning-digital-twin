@@ -49,6 +49,23 @@
   transform: translateY(0);
 }
 
+.btn-checkout.paid {
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  cursor: default;
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+.btn-checkout.paid:hover {
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+  transform: none;
+  box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+}
+
+.btn-checkout:disabled {
+  opacity: 0.9;
+  cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
   .checkout-box {
     flex-direction: column;

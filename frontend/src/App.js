@@ -5,6 +5,7 @@ import BusMapPage from './pages/BusMapPage';
 import AdminPage from './pages/AdminPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import PaymentReturnPage from './pages/PaymentReturnPage';
 import { fixLeafletDefaultIcon } from './utils/mapHelpers';
 import 'leaflet/dist/leaflet.css';
 import './App.css';
@@ -35,6 +36,7 @@ function App() {
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/payment/vnpay-return" element={<PaymentReturnPage />} />
         
         {/* Protected routes */}
         <Route 

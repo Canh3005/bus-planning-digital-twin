@@ -1,7 +1,6 @@
 // ~/bus-admin-backend/controllers/paymentController.js
 const crypto = require('crypto');
 const querystring = require('qs');
-const dateFormat = require('dateformat').default || require('dateformat');
 
 class PaymentController {
     /**
@@ -17,6 +16,7 @@ class PaymentController {
                 req.connection.socket?.remoteAddress;
 
             const date = new Date();
+            const dateFormat = (await import('dateformat')).default;
             const createDate = dateFormat(date, 'yyyymmddHHmmss');
             const orderId = dateFormat(date, 'HHmmss');
 

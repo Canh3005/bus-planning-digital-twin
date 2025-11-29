@@ -6,6 +6,7 @@ const Sidebar = ({ activeTab, onTabChange }) => {
   const menuItems = [
     { id: 'stations', icon: '🚏', label: 'Trạm Xe' },
     { id: 'routes', icon: '🚌', label: 'Tuyến Xe' },
+    { id: 'revenue', icon: '📊', label: 'Thống Kê' },
   ];
 
   return (

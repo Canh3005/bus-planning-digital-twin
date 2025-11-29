@@ -1,7 +1,8 @@
 // ~/bus-admin-backend/controllers/paymentController.js
 const crypto = require('crypto');
 const querystring = require('qs');
-
+const Payment = require('../models/Payment');
+const revenueService = require('../services/revenueService');
 class PaymentController {
     /**
      * POST /api/payment/create_payment_url - Tạo URL thanh toán VNPay
@@ -21,6 +22,7 @@ class PaymentController {
             const orderId = dateFormat(date, 'HHmmss');
 
             const amount = req.body.amount;
+            const routeIds = req.body.routeIds || []; // Nhận routeIds từ frontend
             const bankCode = req.body.bankCode || '';
             const orderInfo = req.body.orderDescription || 'Thanh toan ve xe buyt';
             const orderType = req.body.orderType || 'billpayment';
@@ -66,6 +68,14 @@ class PaymentController {
             vnp_Params['vnp_SecureHash'] = signed;
             
             vnpUrl += '?' + querystring.stringify(vnp_Params, { encode: false });
+
+            // Lưu thông tin payment vào database
+            await Payment.create({
+                orderId,
+                amount,
+                routeIds,
+                status: 'pending'
+            });
 
             // Trả về URL để frontend redirect
             res.status(200).json({ 
@@ -146,29 +156,53 @@ class PaymentController {
             if (secureHash === signed) {
                 const orderId = vnp_Params['vnp_TxnRef'];
                 const rspCode = vnp_Params['vnp_ResponseCode'];
+                const amount = parseInt(vnp_Params['vnp_Amount']) / 100;
                 
-                // TODO: Kiểm tra orderId có tồn tại trong DB không
-                // TODO: Kiểm tra số tiền có khớp không
-                // TODO: Kiểm tra trạng thái đơn hàng (chưa xử lý thì mới cập nhật)
+                // Tìm payment record
+                const payment = await Payment.findOne({ orderId });
                 
-                // Giả sử kiểm tra thành công
-                const checkOrderId = true;
-                const checkAmount = true;
+                if (!payment) {
+                    return res.status(200).json({ RspCode: '01', Message: 'Order not found' });
+                }
                 
-                if (checkOrderId) {
-                    if (checkAmount) {
-                        if (rspCode === '00') {
-                            // TODO: Cập nhật trạng thái đơn hàng thành công trong DB
-                            res.status(200).json({ RspCode: '00', Message: 'Success' });
-                        } else {
-                            // TODO: Cập nhật trạng thái đơn hàng thất bại trong DB
-                            res.status(200).json({ RspCode: '00', Message: 'Success' });
-                        }
-                    } else {
-                        res.status(200).json({ RspCode: '04', Message: 'Amount invalid' });
+                // Kiểm tra số tiền
+                if (payment.amount !== amount) {
+                    return res.status(200).json({ RspCode: '04', Message: 'Amount invalid' });
+                }
+                
+                if (rspCode === '00') {
+                    // Thanh toán thành công - Cập nhật status và gọi recordRevenue
+                    payment.status = 'success';
+                    payment.vnpayResponse = vnp_Params;
+                    await payment.save();
+                    
+                    // Gọi API recordRevenue
+                    try {
+                        const currentDate = new Date();
+                        const month = currentDate.getMonth() + 1;
+                        const year = currentDate.getFullYear();
+                        
+                        await revenueService.recordRevenue({
+                            routeIds: payment.routeIds,
+                            month,
+                            year,
+                            amount: payment.amount
+                        });
+                        
+                        console.log('✅ Đã ghi doanh thu:', { orderId, amount, routeIds: payment.routeIds });
+                    } catch (error) {
+                        console.error('❌ Lỗi ghi doanh thu:', error);
+                        // Không return error để VNPay vẫn nhận được success response
                     }
+                    
+                    res.status(200).json({ RspCode: '00', Message: 'Success' });
                 } else {
-                    res.status(200).json({ RspCode: '01', Message: 'Order not found' });
+                    // Thanh toán thất bại
+                    payment.status = 'failed';
+                    payment.vnpayResponse = vnp_Params;
+                    await payment.save();
+                    
+                    res.status(200).json({ RspCode: '00', Message: 'Success' });
                 }
             } else {
                 res.status(200).json({ RspCode: '97', Message: 'Checksum failed' });

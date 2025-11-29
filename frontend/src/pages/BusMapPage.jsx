@@ -205,6 +205,9 @@ const BusMapPage = () => {
     }
 
     try {
+      // Lấy danh sách routeIds từ foundPaths
+      const routeIds = foundPaths?.paths?.[0]?.routes?.map(r => r.routeId) || [];
+      
       // Lưu thông tin tìm kiếm vào localStorage trước khi redirect
       const tripData = {
         startStationName,
@@ -214,14 +217,16 @@ const BusMapPage = () => {
         foundPaths,
         foundTripRouteId,
         tripCost,
+        routeIds,
         timestamp: new Date().toISOString()
       };
       localStorage.setItem('tripData', JSON.stringify(tripData));
       
-      // Gọi API tạo URL thanh toán VNPay
+      // Gọi API tạo URL thanh toán VNPay với routeIds
       const result = await paymentAPI.createPaymentUrl(
         tripCost,
-        `Thanh toán vé xe buýt - ${tripCost.toLocaleString()} VND`
+        `Thanh toán vé xe buýt - ${tripCost.toLocaleString()} VND`,
+        routeIds
       );
 
       if (result.success && result.paymentUrl) {

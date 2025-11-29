@@ -153,12 +153,22 @@ export const authAPI = {
 
 // API cho Payment
 export const paymentAPI = {
-  createPaymentUrl: async (amount, orderDescription = 'Thanh toan ve xe buyt') => {
+  createPaymentUrl: async (amount, orderDescription = 'Thanh toan ve xe buyt', routeIds = []) => {
     const response = await apiClient.post('/api/payment/create_payment_url', {
       amount,
       orderDescription,
+      routeIds,
       orderType: 'billpayment',
       language: 'vn'
+    });
+    return response.data;
+  },
+};
+
+export const revenueAPI = {
+  getRevenueReport: async (month, year) => {
+    const response = await apiClient.get('/api/revenue/report', {
+      params: { month, year }
     });
     return response.data;
   },

@@ -1,0 +1,278 @@
+/* src/components/Admin/RevenueChart.css */
+.revenue-chart-container {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.revenue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.revenue-title h2 {
+  font-size: 24px;
+  color: #2c3e50;
+  margin: 0 0 4px 0;
+}
+
+.revenue-subtitle {
+  color: #7f8c8d;
+  font-size: 14px;
+  margin: 0;
+}
+
+.revenue-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.view-mode-toggle {
+  display: flex;
+  gap: 8px;
+  background: #f8f9fa;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.mode-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  color: #6c757d;
+}
+
+.mode-btn:hover {
+  background: #e9ecef;
+}
+
+.mode-btn.active {
+  background: #667eea;
+  color: white;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.filter-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 2px solid #e9ecef;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  color: #495057;
+}
+
+.filter-select:hover {
+  border-color: #667eea;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.revenue-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.summary-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.summary-icon {
+  font-size: 32px;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+}
+
+.summary-content {
+  flex: 1;
+}
+
+.summary-label {
+  margin: 0 0 4px 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.summary-value {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+}
+
+.chart-content {
+  margin-top: 24px;
+  overflow-y: auto;
+  max-height: 500px;
+  min-height: 200px;
+}
+
+.chart-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.chart-bar-row {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
+.bar-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.route-name {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 14px;
+}
+
+.route-code {
+  font-size: 12px;
+  color: #7f8c8d;
+}
+
+.bar-container {
+  position: relative;
+  height: 40px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  transition: width 0.8s ease-out;
+  position: relative;
+  min-width: 80px;
+}
+
+.bar-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+  white-space: nowrap;
+}
+
+.chart-loading,
+.chart-error,
+.chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #6c757d;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.chart-error {
+  color: #e74c3c;
+}
+
+.retry-btn {
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.retry-btn:hover {
+  background: #5568d3;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+@media (max-width: 768px) {
+  .revenue-header {
+    flex-direction: column;
+  }
+
+  .chart-bar-row {
+    grid-template-columns: 120px 1fr;
+    gap: 12px;
+  }
+
+  .bar-label {
+    align-items: flex-start;
+  }
+
+  .route-name {
+    font-size: 13px;
+  }
+
+  .revenue-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-value {
+    font-size: 20px;
+  }
+}

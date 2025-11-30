@@ -29,6 +29,7 @@ const ControlPanel = ({
   onRouteSelect,
   onToggleOtherStations,
   onCloseTripResult,
+  isShowingTripResult
 }) => {
   return (
     <div className="controls">
@@ -54,15 +55,17 @@ const ControlPanel = ({
       
       <TripResult foundPaths={foundPaths} onClose={onCloseTripResult} />
       
-      <CheckoutBox tripCost={tripCost} isPaid={isPaid} onCheckout={onCheckout} />
+      {isShowingTripResult && <CheckoutBox tripCost={tripCost} isPaid={isPaid} onCheckout={onCheckout} />}
       
-      <RouteFilter
-        routes={routes}
-        selectedRouteId={selectedRouteId}
-        hideOtherStations={hideOtherStations}
-        onRouteSelect={onRouteSelect}
-        onToggleOtherStations={onToggleOtherStations}
-      />
+      {!foundPaths && (
+        <RouteFilter
+          routes={routes}
+          selectedRouteId={selectedRouteId}
+          hideOtherStations={hideOtherStations}
+          onRouteSelect={onRouteSelect}
+          onToggleOtherStations={onToggleOtherStations}
+        />
+      )}
     </div>
   );
 };

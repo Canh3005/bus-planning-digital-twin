@@ -26,8 +26,9 @@ const TripPlanner = ({
   const destInputRef = useRef(null);
   const startSuggestionsRef = useRef(null);
   const destSuggestionsRef = useRef(null);
+  const GOONG_API_KEY = process.env.REACT_APP_GOONG_API_KEY;
 
-  // Fetch địa điểm từ Nominatim API cho điểm bắt đầu
+  // Fetch địa điểm từ Goong Maps API cho điểm bắt đầu
   useEffect(() => {
     if (!startStationName || startStationName.trim().length === 0) {
       setStartSuggestions([]);
@@ -38,24 +39,36 @@ const TripPlanner = ({
     const timer = setTimeout(async () => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          `https://rsapi.goong.io/Place/AutoComplete?api_key=${GOONG_API_KEY}&input=${encodeURIComponent(
             startStationName
-          )}&limit=5&countrycodes=vn`
+          )}&limit=5&location=10.762622,106.660172&radius=50000`
         );
         const data = await response.json();
-        setStartSuggestions(data);
+        console.log('Goong Autocomplete response:', data);
+        
+        // Transform Goong response to match expected format
+        const suggestions = (data.predictions || []).map(place => ({
+          place_id: place.place_id,
+          display_name: place.description,
+          lat: null, // Will be fetched on selection
+          lon: null,
+          type: place.structured_formatting?.secondary_text || '',
+          goong_place_id: place.place_id
+        }));
+        
+        setStartSuggestions(suggestions);
       } catch (error) {
         console.error('Error fetching start suggestions:', error);
         setStartSuggestions([]);
       } finally {
         setIsLoadingStart(false);
       }
-    }, 500);
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [startStationName]);
 
-  // Fetch địa điểm từ Nominatim API cho điểm đến
+  // Fetch địa điểm từ Goong Maps API cho điểm đến
   useEffect(() => {
     if (!destinationName || destinationName.trim().length === 0) {
       setDestSuggestions([]);
@@ -66,19 +79,30 @@ const TripPlanner = ({
     const timer = setTimeout(async () => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          `https://rsapi.goong.io/Place/AutoComplete?api_key=${GOONG_API_KEY}&input=${encodeURIComponent(
             destinationName
-          )}&limit=5&countrycodes=vn`
+          )}&limit=5&location=10.762622,106.660172&radius=50000`
         );
         const data = await response.json();
-        setDestSuggestions(data);
+        
+        // Transform Goong response to match expected format
+        const suggestions = (data.predictions || []).map(place => ({
+          place_id: place.place_id,
+          display_name: place.description,
+          lat: null, // Will be fetched on selection
+          lon: null,
+          type: place.structured_formatting?.secondary_text || '',
+          goong_place_id: place.place_id
+        }));
+        
+        setDestSuggestions(suggestions);
       } catch (error) {
         console.error('Error fetching destination suggestions:', error);
         setDestSuggestions([]);
       } finally {
         setIsLoadingDest(false);
       }
-    }, 500);
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [destinationName]);
@@ -101,23 +125,49 @@ const TripPlanner = ({
   }, []);
 
   // Handler chọn gợi ý điểm bắt đầu
-  const handleSelectStartSuggestion = (place) => {
+  const handleSelectStartSuggestion = async (place) => {
     onStartChange(place.display_name);
-    // Gọi callback để cập nhật location với tọa độ
-    if (onStartLocationChange && place.lat && place.lon) {
-      onStartLocationChange(place.lat, place.lon, place.display_name);
-    }
     setShowStartSuggestions(false);
+    
+    // Fetch tọa độ từ Goong Place Detail API
+    if (onStartLocationChange && place.goong_place_id) {
+      try {
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/Detail?place_id=${place.goong_place_id}&api_key=${GOONG_API_KEY}`
+        );
+        const data = await response.json();
+        
+        if (data.result && data.result.geometry && data.result.geometry.location) {
+          const { lat, lng } = data.result.geometry.location;
+          onStartLocationChange(lat, lng, place.display_name);
+        }
+      } catch (error) {
+        console.error('Error fetching place details:', error);
+      }
+    }
   };
 
   // Handler chọn gợi ý điểm đến
-  const handleSelectDestSuggestion = (place) => {
+  const handleSelectDestSuggestion = async (place) => {
     onDestinationChange(place.display_name);
-    // Gọi callback để cập nhật location với tọa độ
-    if (onDestinationLocationChange && place.lat && place.lon) {
-      onDestinationLocationChange(place.lat, place.lon, place.display_name);
-    }
     setShowDestSuggestions(false);
+    
+    // Fetch tọa độ từ Goong Place Detail API
+    if (onDestinationLocationChange && place.goong_place_id) {
+      try {
+        const response = await fetch(
+          `https://rsapi.goong.io/Place/Detail?place_id=${place.goong_place_id}&api_key=${GOONG_API_KEY}`
+        );
+        const data = await response.json();
+        
+        if (data.result && data.result.geometry && data.result.geometry.location) {
+          const { lat, lng } = data.result.geometry.location;
+          onDestinationLocationChange(lat, lng, place.display_name);
+        }
+      } catch (error) {
+        console.error('Error fetching place details:', error);
+      }
+    }
   };
 
   return (

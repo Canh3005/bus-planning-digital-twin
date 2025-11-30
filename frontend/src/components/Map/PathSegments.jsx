@@ -56,7 +56,7 @@ const PathSegments = ({ foundPaths }) => {
         const segmentsWithPaths = await Promise.all(
           bestPath.routes.map(async (segment) => {
             // Sử dụng segment.coordinates để lấy real path
-            const coordinates = segment.coordinates || [];
+            const coordinates = segment.stations.map(s => s.location.coordinates) || [];
             
             if (coordinates.length < 2) {
               console.warn(`⚠️ Segment ${segment.routeName} không có đủ coordinates`);

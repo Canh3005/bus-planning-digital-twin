@@ -25,6 +25,7 @@ const BusMapPage = () => {
   const [foundPaths, setFoundPaths] = useState(null); // Lưu kết quả tìm đường
   const [isSearching, setIsSearching] = useState(false);
   const [isPaid, setIsPaid] = useState(false); // Trạng thái thanh toán
+  const [isShowingTripResult, setIsShowingTripResult] = useState(false);
 
   // Kiểm tra payment result từ localStorage khi component mount
   useEffect(() => {
@@ -72,6 +73,7 @@ const BusMapPage = () => {
   // Handler: Đóng kết quả tìm kiếm
   const handleCloseTripResult = () => {
     setFoundPaths(null);
+    setIsShowingTripResult(false);
   };
 
   // Handler: Lấy vị trí GPS
@@ -175,6 +177,7 @@ const BusMapPage = () => {
 
       if (result.success && result.paths && result.paths.length > 0) {
         setFoundPaths(result);
+        setIsShowingTripResult(true);
         
         const bestPath = result.paths[0];
         // Bây giờ segment có routeId thay vì route object
@@ -292,6 +295,7 @@ const BusMapPage = () => {
         onRouteSelect={handleRouteSelect}
         onToggleOtherStations={handleToggleOtherStations}
         onCloseTripResult={handleCloseTripResult}
+        isShowingTripResult={isShowingTripResult}
       />
 
       <div className="map-container">

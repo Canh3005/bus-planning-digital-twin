@@ -569,12 +569,12 @@ class PathfindingService {
         if (boardIndex === -1 || alightIndex === -1 || boardIndex >= alightIndex) {
             return [];
         }
-        const coordinates = [];
+        const stations = [];
         for (let i = boardIndex; i <= alightIndex; i++) {
             const station = orderedStations[i];
-            coordinates.push(station.location.coordinates);
+            stations.push(station);
         }
-        return coordinates;
+        return stations;
     }
 
     /**
@@ -599,6 +599,11 @@ class PathfindingService {
                     boardStation,
                     alightStation
                 );
+                const stations = this.findCoordinatesBetweenStations(
+                    p,
+                    boardStation,
+                    alightStation
+                );
 
                 segments.unshift({
                     type: 'RIDE',
@@ -609,11 +614,7 @@ class PathfindingService {
                     alightStation: alightStation,
                     distance: distance,
                     travelTime: this.estimateTravelTime(p.routeId, p.boardIndex, p.alightIndex),
-                    coordinates: this.findCoordinatesBetweenStations(
-                        p,
-                        boardStation,
-                        alightStation
-                    )
+                    stations: stations
                 });
 
                 currentStopId = p.boardStop;

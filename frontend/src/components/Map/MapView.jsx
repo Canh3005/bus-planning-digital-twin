@@ -24,9 +24,20 @@ const MapView = ({
   const highlightedStationIds = selectedRoute?.stations?.map(s => s.stationId?._id || s.stationId) || [];
   
   // Filter stations nếu cần ẩn trạm khác
-  const displayStations = hideOtherStations && selectedRouteId
-    ? stations.filter(station => highlightedStationIds.includes(station._id || station.id))
-    : stations;
+  let displayStations = [];
+  if (hideOtherStations && selectedRouteId) {
+    displayStations = stations.filter(station => highlightedStationIds.includes(station._id || station.id));
+  } else if (foundPaths) {
+    for(const path of foundPaths.paths) {
+      for(const segment of path.routes) {
+        for(const station of segment.stations) {
+          displayStations.push(station);
+        }
+      }
+    }
+  } else {
+    displayStations = stations;
+  }
   
   // Xác định vị trí bắt đầu (ưu tiên manual, fallback GPS)
   const startLocation = manualStartLocation || currentLocation;

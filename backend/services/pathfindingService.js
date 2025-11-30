@@ -1,6 +1,7 @@
 // services/pathfindingService.js
 const BusRoute = require('../models/BusRoute');
 const BusStation = require('../models/BusStation');
+const { dijkstraMultiCriteria } = require('./dijsktraMultiCriteriaService');
 
 class PathfindingService {
     /**
@@ -128,14 +129,11 @@ class PathfindingService {
                 endStation
             };
         }
-        console.log(1000000);
         // Bước 2: Lấy tất cả các tuyến
         const allRoutes = await BusRoute.find({})
             .populate('startStationId', 'name address location')
             .populate('endStationId', 'name address location')
             .populate('stations.stationId', 'name address location');
-        console.log(`Tổng số tuyến: ${allRoutes}`);
-
         // Bước 3: Tìm đường đi trực tiếp (1 tuyến)
         const directPath = this.findDirectPath(startStation, endStation, allRoutes);
         if (directPath) {
@@ -375,7 +373,8 @@ class PathfindingService {
 
         // Bước 4: Chạy Dijkstra với min-heap tối ưu
         const dijkstraStart = Date.now();
-        const result = this.dijkstraOptimized(graph, startStation._id.toString(), endStation._id.toString());
+        // const result = this.dijkstraOptimized(graph, startStation._id.toString(), endStation._id.toString());
+        const result = dijkstraMultiCriteria(graph, startStation._id.toString(), endStation._id.toString());
         console.log(`⏱️ Dijkstra: ${Date.now() - dijkstraStart}ms`);
 
         if (!result.found) {

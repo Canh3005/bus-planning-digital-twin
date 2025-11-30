@@ -26,6 +26,7 @@ const TripPlanner = ({
   const destInputRef = useRef(null);
   const startSuggestionsRef = useRef(null);
   const destSuggestionsRef = useRef(null);
+  const GOONG_API_KEY = process.env.REACT_APP_GOONG_API_KEY;
 
   // Fetch địa điểm từ Goong Maps API cho điểm bắt đầu
   useEffect(() => {
@@ -37,8 +38,6 @@ const TripPlanner = ({
     setIsLoadingStart(true);
     const timer = setTimeout(async () => {
       try {
-        // Sử dụng Goong Autocomplete API (miễn phí với API key)
-        const GOONG_API_KEY = 'WOZZEOLjXEv4aUGKRUdtjRu1injMl1lCyx8bVwwh'; // Demo key, nên thay bằng key riêng
         const response = await fetch(
           `https://rsapi.goong.io/Place/AutoComplete?api_key=${GOONG_API_KEY}&input=${encodeURIComponent(
             startStationName
@@ -79,8 +78,6 @@ const TripPlanner = ({
     setIsLoadingDest(true);
     const timer = setTimeout(async () => {
       try {
-        // Sử dụng Goong Autocomplete API (miễn phí với API key)
-        const GOONG_API_KEY = 'WOZZEOLjXEv4aUGKRUdtjRu1injMl1lCyx8bVwwh'; // Demo key, nên thay bằng key riêng
         const response = await fetch(
           `https://rsapi.goong.io/Place/AutoComplete?api_key=${GOONG_API_KEY}&input=${encodeURIComponent(
             destinationName
@@ -135,7 +132,6 @@ const TripPlanner = ({
     // Fetch tọa độ từ Goong Place Detail API
     if (onStartLocationChange && place.goong_place_id) {
       try {
-        const GOONG_API_KEY = 'WOZZEOLjXEv4aUGKRUdtjRu1injMl1lCyx8bVwwh';
         const response = await fetch(
           `https://rsapi.goong.io/Place/Detail?place_id=${place.goong_place_id}&api_key=${GOONG_API_KEY}`
         );
@@ -159,7 +155,6 @@ const TripPlanner = ({
     // Fetch tọa độ từ Goong Place Detail API
     if (onDestinationLocationChange && place.goong_place_id) {
       try {
-        const GOONG_API_KEY = 'WOZZEOLjXEv4aUGKRUdtjRu1injMl1lCyx8bVwwh';
         const response = await fetch(
           `https://rsapi.goong.io/Place/Detail?place_id=${place.goong_place_id}&api_key=${GOONG_API_KEY}`
         );

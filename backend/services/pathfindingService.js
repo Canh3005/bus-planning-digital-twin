@@ -1,16 +1,22 @@
-// services/pathfindingService.js - RAPTOR Implementation
+// services/pathfindingService.js - RAPTOR Implementation (Full Version)
 const BusRoute = require('../models/BusRoute');
 const BusStation = require('../models/BusStation');
 
 class PathfindingService {
     constructor() {
         // Cache cho preprocessing
-        this.routesServingStop = new Map();
-        this.stopsOfRoute = new Map();
-        this.stopIndexInRoute = new Map();
-        this.footpathAdj = new Map();
+        this.routesServingStop = new Map(); // Map<stopId, Set<routeId>>
+        this.stopsOfRoute = new Map(); // Map<routeId, Array<station>>
+        this.stopIndexInRoute = new Map(); // Map<routeId_stopId, index>
+        this.footpathAdj = new Map(); // Map<stopId, Array<{toStop, walkTime}>>
+        this.routeMap = new Map(); // Map<routeId, route>
+        this.stationMap = new Map(); // Map<stationId, station>
+        
+        // Constants
         this.minTransferTime = 120; // 2 phút (seconds)
         this.maxWalkDistance = 500; // meters
+        this.avgBusSpeed = 8.33; // m/s (30 km/h)
+        this.walkSpeed = 1.4; // m/s (5 km/h)
     }
 
     /**
@@ -27,17 +33,17 @@ class PathfindingService {
                     $maxDistance: maxDistance
                 }
             }
-        }).limit(1);
+        }).limit(5); // Lấy 5 trạm gần nhất để có lựa chọn
 
         if (stations.length === 0) {
             throw new Error(`Không tìm thấy trạm nào trong bán kính ${maxDistance}m`);
         }
 
-        return stations[0];
+        return stations;
     }
 
     /**
-     * Tính khoảng cách Haversine
+     * Tính khoảng cách Haversine (km)
      */
     calculateDistance(lat1, lon1, lat2, lon2) {
         const R = 6371; // km
@@ -62,12 +68,20 @@ class PathfindingService {
         console.log('🔧 Preprocessing RAPTOR structures...');
         const startTime = Date.now();
 
+        // Clear old data
         this.routesServingStop.clear();
         this.stopsOfRoute.clear();
         this.stopIndexInRoute.clear();
         this.footpathAdj.clear();
+        this.routeMap.clear();
+        this.stationMap.clear();
 
-        // Build RoutesServingStop và StopsOfRoute
+        // Build route map
+        for (const route of allRoutes) {
+            this.routeMap.set(route._id.toString(), route);
+        }
+
+        // Build RoutesServingStop, StopsOfRoute, StationMap
         for (const route of allRoutes) {
             const routeId = route._id.toString();
             const orderedStops = this.getOrderedStations(route);
@@ -75,10 +89,16 @@ class PathfindingService {
             // StopsOfRoute[route]
             this.stopsOfRoute.set(routeId, orderedStops);
 
-            // RoutesServingStop[stop]
+            // RoutesServingStop[stop] và StationMap
             orderedStops.forEach((stop, index) => {
                 const stopId = stop._id.toString();
                 
+                // Add to station map
+                if (!this.stationMap.has(stopId)) {
+                    this.stationMap.set(stopId, stop);
+                }
+
+                // RoutesServingStop
                 if (!this.routesServingStop.has(stopId)) {
                     this.routesServingStop.set(stopId, new Set());
                 }
@@ -94,14 +114,18 @@ class PathfindingService {
         await this.buildFootpathNetwork();
 
         console.log(`✅ Preprocessing done in ${Date.now() - startTime}ms`);
-        console.log(`📊 Stats: ${this.routesServingStop.size} stops, ${allRoutes.length} routes`);
+        console.log(`📊 Stats:`);
+        console.log(`   - ${this.stationMap.size} unique stops`);
+        console.log(`   - ${allRoutes.length} routes`);
+        console.log(`   - ${this.footpathAdj.size} stops with walking connections`);
     }
 
     /**
      * Xây dựng mạng đi bộ giữa các trạm gần nhau
      */
     async buildFootpathNetwork() {
-        const allStops = await BusStation.find({});
+        const allStops = Array.from(this.stationMap.values());
+        let connectionCount = 0;
         
         for (let i = 0; i < allStops.length; i++) {
             const stopA = allStops[i];
@@ -121,10 +145,12 @@ class PathfindingService {
                 const distMeters = distKm * 1000;
 
                 if (distMeters <= this.maxWalkDistance) {
-                    const walkTime = Math.ceil(distMeters / 1.4); // 1.4 m/s walking speed
+                    const walkTime = Math.ceil(distMeters / this.walkSpeed); // seconds
+                    
                     footpaths.push({
                         toStop: stopB._id.toString(),
-                        walkTime: walkTime
+                        walkTime: walkTime,
+                        distance: distMeters
                     });
 
                     // Bidirectional
@@ -134,8 +160,11 @@ class PathfindingService {
                     }
                     this.footpathAdj.get(stopBId).push({
                         toStop: stopAId,
-                        walkTime: walkTime
+                        walkTime: walkTime,
+                        distance: distMeters
                     });
+
+                    connectionCount += 2;
                 }
             }
 
@@ -143,75 +172,113 @@ class PathfindingService {
                 this.footpathAdj.set(stopAId, footpaths);
             }
         }
+
+        console.log(`   - ${connectionCount} walking connections created`);
     }
 
     /**
-     * RAPTOR MAIN ALGORITHM
+     * MAIN ENTRY POINT: Tìm đường đi sử dụng RAPTOR
      */
-    async findShortestPathRAPTOR(startLat, startLon, endLat, endLon, maxDistance = 1000, K = 4) {
+    async findShortestPathRAPTOR(startLat, startLon, endLat, endLon, options = {}) {
+        const {
+            maxDistance = 1000,
+            K = 4, // Max transfers + 1
+            lambda = 300 // Penalty per transfer (seconds)
+        } = options;
+
         const totalStart = Date.now();
         console.log('🚀 Starting RAPTOR algorithm...');
+        console.log(`⚙️  Settings: K=${K}, lambda=${lambda}s, maxDistance=${maxDistance}m`);
 
-        // 1. Tìm trạm gần điểm bắt đầu và kết thúc
-        const startStation = await this.findNearestStation(startLat, startLon, maxDistance);
-        const endStation = await this.findNearestStation(endLat, endLon, maxDistance);
-        
-        console.log(`📍 Start: ${startStation.name}, End: ${endStation.name}`);
+        try {
+            // 1. Tìm trạm gần điểm bắt đầu và kết thúc
+            const startStations = await this.findNearestStation(startLat, startLon, maxDistance);
+            const endStations = await this.findNearestStation(endLat, endLon, maxDistance);
+            
+            const startStation = startStations[0];
+            const endStation = endStations[0];
 
-        if (startStation._id.toString() === endStation._id.toString()) {
+            console.log(`📍 Start: ${startStation.name}`);
+            console.log(`📍 End: ${endStation.name}`);
+
+            // Check if same station
+            if (startStation._id.toString() === endStation._id.toString()) {
+                return {
+                    success: true,
+                    message: 'Điểm bắt đầu và điểm đến cùng một trạm',
+                    paths: [],
+                    startStation,
+                    endStation,
+                    computation_time: Date.now() - totalStart
+                };
+            }
+
+            // 2. Load và preprocess routes
+            const routeLoadStart = Date.now();
+            const allRoutes = await BusRoute.find({})
+                .populate('startStationId', 'name address location')
+                .populate('endStationId', 'name address location')
+                .populate('stations.stationId', 'name address location');
+
+            console.log(`⏱️  Route loading: ${Date.now() - routeLoadStart}ms`);
+
+            if (allRoutes.length === 0) {
+                return {
+                    success: false,
+                    message: 'Không có tuyến xe buýt nào trong hệ thống',
+                    paths: [],
+                    startStation,
+                    endStation,
+                    computation_time: Date.now() - totalStart
+                };
+            }
+
+            await this.preprocessRAPTOR(allRoutes);
+
+            // 3. Run RAPTOR với multiple origin/destination
+            const raptorStart = Date.now();
+            const result = this.runRAPTOR(
+                startStations.map(s => s._id.toString()),
+                endStations.map(s => s._id.toString()),
+                0, // t0
+                K,
+                lambda
+            );
+            console.log(`⏱️  RAPTOR execution: ${Date.now() - raptorStart}ms`);
+            console.log(`⏱️  Total computation time: ${Date.now() - totalStart}ms`);
+
+            if (!result.success) {
+                return {
+                    success: false,
+                    message: 'Không tìm thấy đường đi phù hợp',
+                    paths: [],
+                    startStation,
+                    endStation,
+                    computation_time: Date.now() - totalStart
+                };
+            }
+
             return {
                 success: true,
-                message: 'Điểm bắt đầu và điểm đến cùng một trạm',
-                paths: [],
+                message: `Tìm thấy ${result.paths.length} đường đi (Pareto-optimal)`,
+                paths: result.paths,
                 startStation,
-                endStation
+                endStation,
+                algorithm: 'RAPTOR',
+                computation_time: Date.now() - totalStart,
+                stats: result.stats
             };
+
+        } catch (error) {
+            console.error('❌ Error in findShortestPathRAPTOR:', error);
+            throw error;
         }
-
-        // 2. Load và preprocess routes
-        const allRoutes = await BusRoute.find({})
-            .populate('startStationId', 'name address location')
-            .populate('endStationId', 'name address location')
-            .populate('stations.stationId', 'name address location');
-
-        await this.preprocessRAPTOR(allRoutes);
-
-        // 3. Run RAPTOR
-        const t0 = 0; // Thời điểm bắt đầu (có thể customize)
-        const result = this.runRAPTOR(
-            startStation._id.toString(),
-            endStation._id.toString(),
-            t0,
-            K,
-            allRoutes
-        );
-
-        console.log(`⏱️ Total time: ${Date.now() - totalStart}ms`);
-
-        if (!result.success) {
-            return {
-                success: false,
-                message: 'Không tìm thấy đường đi phù hợp',
-                paths: [],
-                startStation,
-                endStation
-            };
-        }
-
-        return {
-            success: true,
-            message: `Tìm thấy ${result.paths.length} đường đi (Pareto optimal)`,
-            paths: result.paths,
-            startStation,
-            endStation,
-            algorithm: 'RAPTOR'
-        };
     }
 
     /**
-     * Core RAPTOR algorithm
+     * Core RAPTOR algorithm (Multi-origin, Multi-destination)
      */
-    runRAPTOR(originStopId, destStopId, t0, K, allRoutes) {
+    runRAPTOR(originStopIds, destStopIds, t0, K, lambda) {
         const INF = Number.MAX_SAFE_INTEGER;
         
         // arr[k][s] = earliest arrival at stop s with k rides
@@ -225,9 +292,11 @@ class PathfindingService {
             parent[0].set(s, null);
         }
 
-        // Origin
-        arr[0].set(originStopId, t0);
-        parent[0].set(originStopId, { type: 'ORIGIN' });
+        // Initialize multiple origins
+        for (const originId of originStopIds) {
+            arr[0].set(originId, t0);
+            parent[0].set(originId, { type: 'ORIGIN' });
+        }
 
         // Walking closure at round 0
         this.walkRelax(arr[0], parent[0]);
@@ -236,7 +305,9 @@ class PathfindingService {
             allStopIds.filter(s => arr[0].get(s) < INF)
         );
 
-        console.log(`🏁 Round 0: ${markedStops.size} stops marked`);
+        console.log(`🏁 Round 0: ${markedStops.size} stops reachable`);
+
+        let totalRoutesScanned = 0;
 
         // Main RAPTOR loop
         for (let k = 1; k <= K; k++) {
@@ -258,12 +329,13 @@ class PathfindingService {
             }
 
             console.log(`  📋 Scanning ${Qroutes.size} routes`);
+            totalRoutesScanned += Qroutes.size;
 
             const newMarked = new Set();
 
             // Scan each route
             for (const routeId of Qroutes) {
-                this.scanRoute(routeId, k, arr, parent, allRoutes, newMarked);
+                this.scanRoute(routeId, k, arr, parent, newMarked);
             }
 
             // Walking relaxation
@@ -274,26 +346,51 @@ class PathfindingService {
             console.log(`  ✅ Round ${k}: ${markedStops.size} stops improved`);
 
             if (markedStops.size === 0) {
-                console.log(`  ⏹️ No improvements, stopping at round ${k}`);
+                console.log(`  ⏹️  No improvements, stopping early at round ${k}`);
                 break;
             }
         }
 
-        // Extract Pareto-optimal paths
-        return this.extractParetoSolutions(arr, parent, destStopId, K, allRoutes);
+        // Extract Pareto-optimal paths for all destinations
+        const allSolutions = [];
+        
+        for (const destId of destStopIds) {
+            const solutions = this.extractParetoSolutions(arr, parent, destId, K, lambda);
+            allSolutions.push(...solutions);
+        }
+
+        // Sort by score (arrival time + lambda * transfers)
+        allSolutions.sort((a, b) => {
+            const scoreA = a.arrivalTime + lambda * a.transfers;
+            const scoreB = b.arrivalTime + lambda * b.transfers;
+            return scoreA - scoreB;
+        });
+
+        // Remove duplicates and keep best 3
+        const uniqueSolutions = this.removeDuplicatePaths(allSolutions);
+        const topSolutions = uniqueSolutions.slice(0, 3);
+
+        return {
+            success: topSolutions.length > 0,
+            paths: topSolutions,
+            stats: {
+                rounds_executed: Math.min(K, markedStops.size),
+                routes_scanned: totalRoutesScanned,
+                solutions_found: allSolutions.length,
+                unique_solutions: uniqueSolutions.length
+            }
+        };
     }
 
     /**
-     * Scan một route trong round k
+     * Scan một route trong round k (Core RAPTOR operation)
      */
-    scanRoute(routeId, k, arr, parent, allRoutes, newMarked) {
-        const route = allRoutes.find(r => r._id.toString() === routeId);
-        if (!route) return;
-
+    scanRoute(routeId, k, arr, parent, newMarked) {
         const stops = this.stopsOfRoute.get(routeId);
         if (!stops || stops.length === 0) return;
 
         let boardedStopId = null;
+        let boardedStopIndex = -1;
         let boardTime = null;
 
         for (let i = 0; i < stops.length; i++) {
@@ -302,25 +399,32 @@ class PathfindingService {
 
             // Try to board at this stop
             if (boardedStopId === null) {
-                const tReady = arr[k - 1].get(stopId) + this.minTransferTime;
+                const prevArrival = arr[k - 1].get(stopId);
                 
-                if (tReady < Number.MAX_SAFE_INTEGER) {
+                if (prevArrival !== undefined && prevArrival < Number.MAX_SAFE_INTEGER) {
+                    const tReady = prevArrival + this.minTransferTime;
+                    
                     // Can board here
                     boardedStopId = stopId;
+                    boardedStopIndex = i;
                     boardTime = tReady;
                 }
             } else {
                 // Already boarded, calculate arrival at this stop
-                const travelTime = this.estimateTravelTime(route, boardedStopId, stopId);
+                const travelTime = this.estimateTravelTime(routeId, boardedStopIndex, i);
                 const tArr = boardTime + travelTime;
 
-                if (tArr < arr[k].get(stopId)) {
+                const currentBest = arr[k].get(stopId);
+                
+                if (tArr < currentBest) {
                     arr[k].set(stopId, tArr);
                     parent[k].set(stopId, {
                         type: 'RIDE',
                         routeId: routeId,
                         boardStop: boardedStopId,
-                        alightStop: stopId
+                        boardIndex: boardedStopIndex,
+                        alightStop: stopId,
+                        alightIndex: i
                     });
                     newMarked.add(stopId);
                 }
@@ -331,20 +435,19 @@ class PathfindingService {
     /**
      * Ước lượng thời gian di chuyển giữa 2 trạm trên cùng tuyến
      */
-    estimateTravelTime(route, fromStopId, toStopId) {
-        const stops = this.stopsOfRoute.get(route._id.toString());
-        const fromIdx = stops.findIndex(s => s._id.toString() === fromStopId);
-        const toIdx = stops.findIndex(s => s._id.toString() === toStopId);
-
-        if (fromIdx === -1 || toIdx === -1 || fromIdx >= toIdx) {
+    estimateTravelTime(routeId, fromIndex, toIndex) {
+        const stops = this.stopsOfRoute.get(routeId);
+        
+        if (!stops || fromIndex < 0 || toIndex >= stops.length || fromIndex >= toIndex) {
             return Number.MAX_SAFE_INTEGER;
         }
 
-        // Simple estimation: distance / average speed (30 km/h = 8.33 m/s)
+        // Calculate total distance
         let totalDist = 0;
-        for (let i = fromIdx; i < toIdx; i++) {
+        for (let i = fromIndex; i < toIndex; i++) {
             const s1 = stops[i];
             const s2 = stops[i + 1];
+            
             const dist = this.calculateDistance(
                 s1.location.coordinates[1], s1.location.coordinates[0],
                 s2.location.coordinates[1], s2.location.coordinates[0]
@@ -352,8 +455,14 @@ class PathfindingService {
             totalDist += dist;
         }
 
-        const avgSpeed = 8.33; // m/s
-        return Math.ceil((totalDist * 1000) / avgSpeed); // seconds
+        // Convert to time: distance(km) * 1000(m) / speed(m/s)
+        const travelTime = Math.ceil((totalDist * 1000) / this.avgBusSpeed);
+        
+        // Add dwell time per stop (assume 30 seconds per stop)
+        const numStops = toIndex - fromIndex;
+        const dwellTime = numStops * 30;
+
+        return travelTime + dwellTime;
     }
 
     /**
@@ -370,23 +479,30 @@ class PathfindingService {
             }
         }
 
+        let processed = 0;
         while (queue.length > 0) {
             const u = queue.shift();
+            processed++;
+            
             const footpaths = this.footpathAdj.get(u);
-
             if (!footpaths) continue;
 
             for (const { toStop: v, walkTime } of footpaths) {
                 const newTime = arrK.get(u) + walkTime;
+                const currentBest = arrK.get(v);
                 
-                if (newTime < arrK.get(v)) {
+                if (currentBest === undefined || newTime < currentBest) {
                     arrK.set(v, newTime);
                     parentK.set(v, {
                         type: 'WALK',
-                        fromStop: u
+                        fromStop: u,
+                        toStop: v
                     });
                     marked.add(v);
-                    queue.push(v);
+                    
+                    if (!queue.includes(v)) {
+                        queue.push(v);
+                    }
                 }
             }
         }
@@ -397,82 +513,104 @@ class PathfindingService {
     /**
      * Trích xuất các nghiệm Pareto-optimal
      */
-    extractParetoSolutions(arr, parent, destStopId, K, allRoutes) {
+    extractParetoSolutions(arr, parent, destStopId, K, lambda) {
         const solutions = [];
+        const destArrival = [];
 
+        // Collect all arrival times at destination
         for (let k = 0; k <= K; k++) {
             const arrTime = arr[k].get(destStopId);
             
-            if (arrTime === undefined || arrTime === Number.MAX_SAFE_INTEGER) {
-                continue;
-            }
-
-            // Check if Pareto-improving
-            const isParetoOptimal = solutions.every(sol => 
-                sol.arrivalTime < arrTime || sol.transfers < k - 1
-            );
-
-            if (isParetoOptimal || solutions.length === 0) {
-                const path = this.reconstructPath(parent, destStopId, k, allRoutes);
-                
-                solutions.push({
-                    arrivalTime: arrTime,
-                    transfers: Math.max(0, k - 1),
-                    routes: path.routes,
-                    totalDistance: path.totalDistance,
-                    totalCost: path.totalCost
-                });
+            if (arrTime !== undefined && arrTime < Number.MAX_SAFE_INTEGER) {
+                destArrival.push({ round: k, arrivalTime: arrTime });
             }
         }
 
-        return {
-            success: solutions.length > 0,
-            paths: solutions
-        };
+        if (destArrival.length === 0) return solutions;
+
+        // Sort by arrival time
+        destArrival.sort((a, b) => a.arrivalTime - b.arrivalTime);
+
+        // Extract Pareto-optimal solutions
+        let minTransfers = Infinity;
+        
+        for (const { round: k, arrivalTime } of destArrival) {
+            const transfers = Math.max(0, k - 1);
+            
+            // Pareto condition: improve either time or transfers
+            const isParetoOptimal = 
+                solutions.length === 0 ||
+                arrivalTime < solutions[solutions.length - 1].arrivalTime ||
+                transfers < minTransfers;
+
+            if (isParetoOptimal) {
+                const path = this.reconstructPath(parent, destStopId, k);
+                
+                if (path.routes.length > 0 || k === 0) {
+                    solutions.push({
+                        arrivalTime: arrivalTime,
+                        transfers: transfers,
+                        routes: path.routes,
+                        totalDistance: path.totalDistance,
+                        totalCost: path.totalCost,
+                        score: arrivalTime + lambda * transfers,
+                        travelTime: this.formatTime(arrivalTime)
+                    });
+                    
+                    minTransfers = Math.min(minTransfers, transfers);
+                }
+            }
+        }
+
+        return solutions;
     }
 
     /**
      * Reconstruct path từ parent pointers
      */
-    reconstructPath(parent, destStopId, k, allRoutes) {
+    reconstructPath(parent, destStopId, k) {
         const segments = [];
         let currentStopId = destStopId;
         let currentRound = k;
 
-        const stationMap = this.buildStationMapFromRoutes(allRoutes);
-
-        while (currentRound > 0) {
+        while (currentRound >= 0) {
             const p = parent[currentRound].get(currentStopId);
             
             if (!p || p.type === 'ORIGIN') break;
 
             if (p.type === 'RIDE') {
-                const route = allRoutes.find(r => r._id.toString() === p.routeId);
+                const route = this.routeMap.get(p.routeId);
+                const boardStation = this.stationMap.get(p.boardStop);
+                const alightStation = this.stationMap.get(p.alightStop);
                 
+                const distance = this.calculateSegmentDistance(
+                    boardStation,
+                    alightStation
+                );
+
                 segments.unshift({
                     type: 'RIDE',
                     routeId: p.routeId,
                     routeName: route?.routeName || 'Unknown',
                     ticketPrice: route?.ticketPrice || 7000,
-                    boardStation: stationMap.get(p.boardStop),
-                    alightStation: stationMap.get(p.alightStop),
-                    distance: this.calculateSegmentDistance(
-                        stationMap.get(p.boardStop),
-                        stationMap.get(p.alightStop)
-                    )
+                    boardStation: boardStation,
+                    alightStation: alightStation,
+                    distance: distance,
+                    travelTime: this.estimateTravelTime(p.routeId, p.boardIndex, p.alightIndex)
                 });
 
                 currentStopId = p.boardStop;
                 currentRound--;
+                
             } else if (p.type === 'WALK') {
+                const fromStation = this.stationMap.get(p.fromStop);
+                const toStation = this.stationMap.get(p.toStop);
+                
                 segments.unshift({
                     type: 'WALK',
-                    fromStation: stationMap.get(p.fromStop),
-                    toStation: stationMap.get(currentStopId),
-                    distance: this.calculateSegmentDistance(
-                        stationMap.get(p.fromStop),
-                        stationMap.get(currentStopId)
-                    )
+                    fromStation: fromStation,
+                    toStation: toStation,
+                    distance: this.calculateSegmentDistance(fromStation, toStation)
                 });
 
                 currentStopId = p.fromStop;
@@ -488,8 +626,35 @@ class PathfindingService {
         };
     }
 
+    /**
+     * Remove duplicate paths (same route sequence)
+     */
+    removeDuplicatePaths(solutions) {
+        const seen = new Set();
+        const unique = [];
+
+        for (const sol of solutions) {
+            const signature = sol.routes
+                .map(r => r.routeId)
+                .join('->');
+
+            if (!seen.has(signature)) {
+                seen.add(signature);
+                unique.push(sol);
+            }
+        }
+
+        return unique;
+    }
+
+    /**
+     * Calculate distance between two stations
+     */
     calculateSegmentDistance(station1, station2) {
-        if (!station1 || !station2) return 0;
+        if (!station1 || !station2 || 
+            !station1.location || !station2.location) {
+            return 0;
+        }
         
         return this.calculateDistance(
             station1.location.coordinates[1],
@@ -499,32 +664,15 @@ class PathfindingService {
         );
     }
 
-    buildStationMapFromRoutes(allRoutes) {
-        const map = new Map();
-        
-        for (const route of allRoutes) {
-            if (route.startStationId) {
-                map.set(route.startStationId._id.toString(), route.startStationId);
-            }
-            if (route.endStationId) {
-                map.set(route.endStationId._id.toString(), route.endStationId);
-            }
-            if (route.stations) {
-                for (const s of route.stations) {
-                    if (s.stationId) {
-                        map.set(s.stationId._id.toString(), s.stationId);
-                    }
-                }
-            }
-        }
-        
-        return map;
-    }
-
+    /**
+     * Get ordered stations of a route
+     */
     getOrderedStations(route) {
         const stations = [];
         
-        stations.push(route.startStationId);
+        if (route.startStationId) {
+            stations.push(route.startStationId);
+        }
 
         if (route.stations && route.stations.length > 0) {
             const sorted = [...route.stations].sort((a, b) => a.order - b.order);
@@ -535,9 +683,57 @@ class PathfindingService {
             }
         }
 
-        stations.push(route.endStationId);
+        if (route.endStationId) {
+            stations.push(route.endStationId);
+        }
 
         return stations;
+    }
+
+    /**
+     * Format time (seconds) to readable string
+     */
+    formatTime(seconds) {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const secs = seconds % 60;
+
+        if (hours > 0) {
+            return `${hours}h ${minutes}m`;
+        } else if (minutes > 0) {
+            return `${minutes}m ${secs}s`;
+        } else {
+            return `${secs}s`;
+        }
+    }
+
+    // ==================== BACKWARD COMPATIBILITY ====================
+    // Keep old methods for existing code that might use them
+
+    /**
+     * @deprecated Use findShortestPathRAPTOR instead
+     */
+    async findShortestPath(startLat, startLon, endLat, endLon, maxDistance = 1000) {
+        console.warn('⚠️  findShortestPath is deprecated. Use findShortestPathRAPTOR instead.');
+        return this.findShortestPathRAPTOR(startLat, startLon, endLat, endLon, { maxDistance });
+    }
+
+    /**
+     * Helper: Tìm tất cả các tuyến đi qua một trạm
+     */
+    async findRoutesPassingThroughStation(stationId) {
+        const routes = await BusRoute.find({
+            $or: [
+                { startStationId: stationId },
+                { endStationId: stationId },
+                { 'stations.stationId': stationId }
+            ]
+        })
+        .populate('startStationId', 'name address location')
+        .populate('endStationId', 'name address location')
+        .populate('stations.stationId', 'name address location');
+
+        return routes;
     }
 }
 

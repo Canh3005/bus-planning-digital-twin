@@ -187,8 +187,6 @@ class PathfindingService {
         } = options;
 
         const totalStart = Date.now();
-        console.log('🚀 Starting RAPTOR algorithm...');
-        console.log(`⚙️  Settings: K=${K}, lambda=${lambda}s, maxDistance=${maxDistance}m`);
 
         try {
             // 1. Tìm trạm gần điểm bắt đầu và kết thúc
@@ -197,9 +195,6 @@ class PathfindingService {
             
             const startStation = startStations[0];
             const endStation = endStations[0];
-
-            console.log(`📍 Start: ${startStation.name}`);
-            console.log(`📍 End: ${endStation.name}`);
 
             // Check if same station
             if (startStation._id.toString() === endStation._id.toString()) {
@@ -244,8 +239,6 @@ class PathfindingService {
                 K,
                 lambda
             );
-            console.log(`⏱️  RAPTOR execution: ${Date.now() - raptorStart}ms`);
-            console.log(`⏱️  Total computation time: ${Date.now() - totalStart}ms`);
 
             if (!result.success) {
                 return {
@@ -565,6 +558,25 @@ class PathfindingService {
         return solutions;
     }
 
+    findCoordinatesBetweenStations(segment, boardStation, alightStation) {
+        const route = this.routeMap.get(segment.routeId);
+        if (!route || !route.stations || route.stations.length === 0) {
+            return [];
+        }
+        const orderedStations = this.getOrderedStations(route);
+        const boardIndex = orderedStations.findIndex(s => s._id.toString() === boardStation._id.toString());
+        const alightIndex = orderedStations.findIndex(s => s._id.toString() === alightStation._id.toString());
+        if (boardIndex === -1 || alightIndex === -1 || boardIndex >= alightIndex) {
+            return [];
+        }
+        const coordinates = [];
+        for (let i = boardIndex; i <= alightIndex; i++) {
+            const station = orderedStations[i];
+            coordinates.push(station.location.coordinates);
+        }
+        return coordinates;
+    }
+
     /**
      * Reconstruct path từ parent pointers
      */
@@ -596,7 +608,12 @@ class PathfindingService {
                     boardStation: boardStation,
                     alightStation: alightStation,
                     distance: distance,
-                    travelTime: this.estimateTravelTime(p.routeId, p.boardIndex, p.alightIndex)
+                    travelTime: this.estimateTravelTime(p.routeId, p.boardIndex, p.alightIndex),
+                    coordinates: this.findCoordinatesBetweenStations(
+                        p,
+                        boardStation,
+                        alightStation
+                    )
                 });
 
                 currentStopId = p.boardStop;

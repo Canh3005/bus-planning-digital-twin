@@ -60,7 +60,7 @@ class PathfindingController {
     async findRouteInMatrix(req, res) {
         try {
             const { startLat, startLon, endLat, endLon, maxDistance } = req.body;
-            const result = await pathfindingService.findShortestPathInMatrix(
+            const result = await pathfindingService.findShortestPathRAPTOR(
                 parseFloat(startLat),
                 parseFloat(startLon),
                 parseFloat(endLat),

@@ -69,6 +69,23 @@
   gap: 4px;
 }
 
+/* ================================================= */
+/* Cập nhật CSS cho mục Thời gian ước tính */
+/* ================================================= */
+.summary-item.time-item {
+  /* Cho mục thời gian một màu nền riêng để nổi bật */
+  background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+  order: -1; /* Đảm bảo nó luôn ở vị trí đầu tiên */
+  min-width: 180px; /* Chiều rộng tối thiểu để nội dung không bị gãy */
+}
+
+.summary-item .time-value {
+  font-size: 1.3em; /* Làm cỡ chữ lớn hơn */
+  font-weight: 800;
+  color: #ffffff;
+}
+/* ================================================= */
+
 .summary-label {
   font-size: 0.85em;
   color: rgba(255, 255, 255, 0.9);
@@ -157,12 +174,22 @@
   font-weight: 500;
 }
 
-.segment-distance {
+/* ================================================= */
+/* Cập nhật CSS cho hiển thị Thời gian/Quãng đường segment */
+/* ================================================= */
+.segment-time-distance {
+  /* Thay thế segment-distance cũ */
   margin-top: 4px;
   font-size: 0.9em;
-  color: #666;
+  color: #34495e;
   font-style: italic;
+  font-weight: 500;
 }
+
+.segment-time-distance span {
+  margin-right: 15px; /* Khoảng cách giữa thời gian và quãng đường nếu chúng nằm trên cùng một dòng */
+}
+/* ================================================= */
 
 .transfer-indicator {
   margin-top: 12px;
@@ -174,6 +201,11 @@
   color: #856404;
   font-weight: 500;
   text-align: center;
+}
+
+.transfer-indicator .transfer-icon {
+  margin-right: 5px;
+  font-size: 1em;
 }
 
 .alternative-routes {
@@ -189,6 +221,22 @@
   font-size: 0.9em;
   color: #1976d2;
   font-weight: 500;
+}
+
+.btn-view-alternatives {
+    background: #4a90e2;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    margin-left: 10px;
+    transition: background 0.2s;
+}
+
+.btn-view-alternatives:hover {
+    background: #357ae8;
 }
 
 /* Responsive */

@@ -354,8 +354,8 @@ class PathfindingService {
 
         // Sort by score (arrival time + lambda * transfers)
         allSolutions.sort((a, b) => {
-            const scoreA = a.arrivalTime + lambda * a.transfers;
-            const scoreB = b.arrivalTime + lambda * b.transfers;
+            const scoreA = a.score;
+            const scoreB = b.score;
             return scoreA - scoreB;
         });
 
@@ -539,6 +539,7 @@ class PathfindingService {
             if (isParetoOptimal) {
                 const path = this.reconstructPath(parent, destStopId, k);
                 
+                // Chỉ thêm giải pháp nếu có ít nhất một chặng đi xe hoặc là đi bộ thuần túy (k=0)
                 if (path.routes.length > 0 || k === 0) {
                     solutions.push({
                         arrivalTime: arrivalTime,
@@ -546,8 +547,10 @@ class PathfindingService {
                         routes: path.routes,
                         totalDistance: path.totalDistance,
                         totalCost: path.totalCost,
-                        score: arrivalTime + lambda * transfers,
-                        travelTime: this.formatTime(arrivalTime)
+                        // Thêm 2 trường mới về thời gian di chuyển
+                        totalTravelTimeSeconds: path.totalTravelTimeSeconds,
+                        totalTravelTimeFormatted: this.formatTime(path.totalTravelTimeSeconds),
+                        score: arrivalTime + lambda * transfers
                     });
                     
                     minTransfers = Math.min(minTransfers, transfers);
@@ -579,11 +582,13 @@ class PathfindingService {
 
     /**
      * Reconstruct path từ parent pointers
+     * ĐÃ CẬP NHẬT: Tính toán và trả về totalTravelTimeSeconds
      */
     reconstructPath(parent, destStopId, k) {
         const segments = [];
         let currentStopId = destStopId;
         let currentRound = k;
+        let totalTravelTimeSeconds = 0; // Biến tích lũy tổng thời gian di chuyển
 
         while (currentRound >= 0) {
             const p = parent[currentRound].get(currentStopId);
@@ -599,6 +604,10 @@ class PathfindingService {
                     boardStation,
                     alightStation
                 );
+                
+                const travelTime = this.estimateTravelTime(p.routeId, p.boardIndex, p.alightIndex);
+                totalTravelTimeSeconds += travelTime; // CỘNG thời gian đi xe
+
                 const stations = this.findCoordinatesBetweenStations(
                     p,
                     boardStation,
@@ -613,7 +622,7 @@ class PathfindingService {
                     boardStation: boardStation,
                     alightStation: alightStation,
                     distance: distance,
-                    travelTime: this.estimateTravelTime(p.routeId, p.boardIndex, p.alightIndex),
+                    travelTime: travelTime,
                     stations: stations
                 });
 
@@ -624,11 +633,19 @@ class PathfindingService {
                 const fromStation = this.stationMap.get(p.fromStop);
                 const toStation = this.stationMap.get(p.toStop);
                 
+                // Lấy walkTime từ footpathAdj
+                const footpaths = this.footpathAdj.get(p.fromStop);
+                const walkSegment = footpaths ? footpaths.find(f => f.toStop === p.toStop) : null;
+                const walkTime = walkSegment ? walkSegment.walkTime : 0;
+                
+                totalTravelTimeSeconds += walkTime; // CỘNG thời gian đi bộ
+
                 segments.unshift({
                     type: 'WALK',
                     fromStation: fromStation,
                     toStation: toStation,
-                    distance: this.calculateSegmentDistance(fromStation, toStation)
+                    distance: this.calculateSegmentDistance(fromStation, toStation),
+                    walkTime: walkTime
                 });
 
                 currentStopId = p.fromStop;
@@ -640,7 +657,8 @@ class PathfindingService {
         return {
             routes: rideSegments,
             totalDistance: segments.reduce((sum, s) => sum + (s.distance || 0), 0),
-            totalCost: rideSegments.reduce((sum, s) => sum + (s.ticketPrice || 0), 0)
+            totalCost: rideSegments.reduce((sum, s) => sum + (s.ticketPrice || 0), 0),
+            totalTravelTimeSeconds: totalTravelTimeSeconds // Trả về tổng thời gian
         };
     }
 
@@ -717,11 +735,15 @@ class PathfindingService {
         const secs = seconds % 60;
 
         if (hours > 0) {
-            return `${hours}h ${minutes}m`;
+            // Làm tròn phút nếu có giây
+            const totalMinutes = Math.round(seconds / 60); 
+            const finalHours = Math.floor(totalMinutes / 60);
+            const finalMinutes = totalMinutes % 60;
+            return `${finalHours} giờ ${finalMinutes} phút`;
         } else if (minutes > 0) {
-            return `${minutes}m ${secs}s`;
+            return `${minutes} phút ${secs} giây`;
         } else {
-            return `${secs}s`;
+            return `${secs} giây`;
         }
     }
 

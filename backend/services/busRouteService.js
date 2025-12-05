@@ -70,7 +70,8 @@ class BusRouteService {
                 type: 'LineString',
                 coordinates: routeData.coordinates
             },
-            operatingHours: routeData.operatingHours,
+            startTime: routeData.startTime,
+            frequencyMinutes: routeData.frequencyMinutes,
             ticketPrice: routeData.ticketPrice,
             description: routeData.description,
             stations: routeData.stations || []
@@ -93,7 +94,8 @@ class BusRouteService {
             routeName: routeData.routeName,
             startStationId: routeData.startStationId,
             endStationId: routeData.endStationId,
-            operatingHours: routeData.operatingHours,
+            startTime: routeData.startTime,
+            frequencyMinutes: routeData.frequencyMinutes,
             ticketPrice: routeData.ticketPrice,
             description: routeData.description
         };

@@ -31,7 +31,8 @@ const EditRouteModal = ({ isOpen, onClose, onSuccess, route, allStations }) => {
   // Form data
   const [formData, setFormData] = useState({
     routeName: '',
-    operatingHours: '',
+    startTime: '',
+    frequencyMinutes: '',
     ticketPrice: '',
     description: ''
   });
@@ -44,7 +45,8 @@ const EditRouteModal = ({ isOpen, onClose, onSuccess, route, allStations }) => {
     if (isOpen && route) {
       setFormData({
         routeName: route.routeName || route.name || '',
-        operatingHours: route.operatingHours || '',
+        startTime: route.startTime || '',
+        frequencyMinutes: route.frequencyMinutes || '',
         ticketPrice: route.ticketPrice || '',
         description: route.description || ''
       });
@@ -158,7 +160,8 @@ const EditRouteModal = ({ isOpen, onClose, onSuccess, route, allStations }) => {
       const routeId = route._id || route.id;
       const payload = {
         routeName: formData.routeName,
-        operatingHours: formData.operatingHours || null,
+        startTime: formData.startTime,
+        frequencyMinutes: formData.frequencyMinutes ? parseInt(formData.frequencyMinutes) : null,
         ticketPrice: formData.ticketPrice ? parseFloat(formData.ticketPrice) : null,
         description: formData.description || null,
         coordinates,
@@ -220,29 +223,50 @@ const EditRouteModal = ({ isOpen, onClose, onSuccess, route, allStations }) => {
               <div className="route-form-row">
                 <div className="form-group">
                   <label className="route-label">
-                    <span className="label-icon">⏰</span>
-                    <span className="label-text">Thời gian hoạt động</span>
+                    <span className="label-icon">🕐</span>
+                    <span className="label-text">Giờ bắt đầu <span className="required">*</span></span>
                   </label>
                   <div className="route-input-wrapper">
-                    <span className="route-input-prefix">🕐</span>
                     <input
-                      type="text"
-                      name="operatingHours"
+                      type="time"
+                      name="startTime"
                       className="route-input route-input-with-prefix"
-                      value={formData.operatingHours}
+                      value={formData.startTime}
                       onChange={handleInputChange}
-                      placeholder="VD: 5h00 - 22h00"
+                      required
                     />
                   </div>
                 </div>
 
                 <div className="form-group">
                   <label className="route-label">
+                    <span className="label-icon">🔄</span>
+                    <span className="label-text">Tần suất (phút) <span className="required">*</span></span>
+                  </label>
+                  <div className="route-input-wrapper">
+                    <input
+                      type="number"
+                      name="frequencyMinutes"
+                      className="route-input route-input-with-prefix"
+                      value={formData.frequencyMinutes}
+                      onChange={handleInputChange}
+                      placeholder="VD: 15"
+                      min="1"
+                      step="1"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row with ticket price */}
+              <div className="route-form-row">
+                <div className="form-group">
+                  <label className="route-label">
                     <span className="label-icon">💰</span>
                     <span className="label-text">Giá vé (VNĐ)</span>
                   </label>
                   <div className="route-input-wrapper">
-                    <span className="route-input-prefix">₫</span>
                     <input
                       type="number"
                       name="ticketPrice"

@@ -60,10 +60,16 @@ const ViewRouteModal = ({ isOpen, onClose, route }) => {
             <span className="info-label">🚏 Số trạm:</span>
             <span className="info-value">{stations.length} trạm</span>
           </div>
-          {route.operatingHours && (
+          {route.startTime && (
             <div className="info-item">
-              <span className="info-label">⏰ Giờ hoạt động:</span>
-              <span className="info-value">{route.operatingHours}</span>
+              <span className="info-label">🕐 Giờ bắt đầu:</span>
+              <span className="info-value">{route.startTime}</span>
+            </div>
+          )}
+          {route.frequencyMinutes && (
+            <div className="info-item">
+              <span className="info-label">🔄 Tần suất:</span>
+              <span className="info-value">{route.frequencyMinutes} phút</span>
             </div>
           )}
           {route.ticketPrice && (

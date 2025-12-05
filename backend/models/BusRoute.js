@@ -50,9 +50,25 @@ const busRouteSchema = new mongoose.Schema(
         },
       },
     },
-    operatingHours: {
+    startTime: {
       type: String,
       trim: true,
+      required: true,
+      validate: {
+        validator: function(v) {
+          return /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v);
+        },
+        message: 'startTime must be in HH:MM format'
+      }
+    },
+    frequencyMinutes: {
+      type: Number,
+      required: true,
+      min: 1,
+      validate: {
+        validator: Number.isInteger,
+        message: 'frequencyMinutes must be an integer'
+      }
     },
     ticketPrice: {
       type: Number,

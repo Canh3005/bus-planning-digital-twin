@@ -1,779 +1,601 @@
-// services/pathfindingService.js - RAPTOR Implementation (Full Version)
 const BusRoute = require('../models/BusRoute');
 const BusStation = require('../models/BusStation');
 
 class PathfindingService {
     constructor() {
-        // Cache cho preprocessing
-        this.routesServingStop = new Map(); // Map<stopId, Set<routeId>>
-        this.stopsOfRoute = new Map(); // Map<routeId, Array<station>>
-        this.stopIndexInRoute = new Map(); // Map<routeId_stopId, index>
-        this.footpathAdj = new Map(); // Map<stopId, Array<{toStop, walkTime}>>
-        this.routeMap = new Map(); // Map<routeId, route>
-        this.stationMap = new Map(); // Map<stationId, station>
+        // --- CẤU TRÚC CACHE (Lưu trong RAM để chạy nhanh) ---
+        this.routesServingStop = new Map(); // stopId -> Set<routeId>
+        this.stopsOfRoute = new Map();      // routeId -> [danh sách trạm object]
+        this.stopIndexInRoute = new Map();  // routeId_stopId -> số thứ tự trạm
+        this.footpathAdj = new Map();       // stopId -> danh sách các trạm đi bộ được
+        this.routeMap = new Map();          // routeId -> object tuyến đầy đủ
+        this.stationMap = new Map();        // stationId -> object trạm đầy đủ
         
-        // Constants
-        this.minTransferTime = 120; // 2 phút (seconds)
-        this.maxWalkDistance = 500; // meters
-        this.avgBusSpeed = 8.33; // m/s (30 km/h)
-        this.walkSpeed = 1.4; // m/s (5 km/h)
+        // --- CACHE THỜI GIAN & LỊCH TRÌNH ---
+        // Map này lưu dữ liệu đã tính toán sẵn: 
+        // routeId -> { startSeconds, endSeconds, frequency, stopsOffset: [0, 120, 300...] }
+        this.routeTimeData = new Map();
+
+        // --- HẰNG SỐ CẤU HÌNH ---
+        this.minTransferTime = 120; // Thời gian tối thiểu để đổi chuyến (giây)
+        this.maxWalkDistance = 500; // Khoảng cách đi bộ tối đa để chuyển trạm (mét)
+        this.avgBusSpeed = 8.33;    // Tốc độ xe buýt trung bình ~30 km/h (m/s)
+        this.walkSpeed = 1.4;       // Tốc độ đi bộ trung bình ~5 km/h (m/s)
+        
+        // --- GIÁ TRỊ MẶC ĐỊNH (FALLBACK) ---
+        // Dùng khi Database chưa có dữ liệu thời gian
+        this.DEFAULT_START_TIME = "05:00";
+        this.DEFAULT_END_TIME = "22:00";   
+        this.DEFAULT_FREQUENCY = 900;      // 15 phút (900 giây)
     }
 
-    /**
-     * Tìm trạm gần nhất với tọa độ cho trước
-     */
-    async findNearestStation(lat, lon, maxDistance = 1000) {
-        const stations = await BusStation.find({
-            location: {
-                $near: {
-                    $geometry: {
-                        type: 'Point',
-                        coordinates: [lon, lat]
-                    },
-                    $maxDistance: maxDistance
-                }
-            }
-        }).limit(5); // Lấy 5 trạm gần nhất để có lựa chọn
+    // ==========================================
+    // 1. CÁC HÀM TIỆN ÍCH (HELPER)
+    // ==========================================
 
-        if (stations.length === 0) {
-            throw new Error(`Không tìm thấy trạm nào trong bán kính ${maxDistance}m`);
-        }
-
-        return stations;
+    /** Đổi giờ "HH:mm" sang tổng số giây từ nửa đêm */
+    timeStringToSeconds(timeStr) {
+        if (!timeStr) return null;
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 3600 + minutes * 60;
     }
 
-    /**
-     * Tính khoảng cách Haversine (km)
-     */
+    /** Đổi giây sang format hiển thị "HH:mm:ss" */
+    formatTime(seconds) {
+        if (seconds == null) return "--:--";
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        // const s = seconds % 60; // Có thể ẩn giây nếu muốn gọn
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    }
+
+    /** Lấy giây hiện tại từ object Date */
+    getMidnightSeconds(dateObj) {
+        return dateObj.getHours() * 3600 + dateObj.getMinutes() * 60 + dateObj.getSeconds();
+    }
+
+    /** Tính khoảng cách giữa 2 điểm GPS (Haversine formula) */
     calculateDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371; // km
-        const dLat = this.toRad(lat2 - lat1);
-        const dLon = this.toRad(lon2 - lon1);
-        const a = 
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const toRad = (deg) => deg * (Math.PI / 180);
+        const R = 6371; // Bán kính trái đất (km)
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     }
 
-    toRad(degrees) {
-        return degrees * (Math.PI / 180);
+    /** Tìm trạm gần nhất trong bán kính cho phép */
+    async findNearestStation(lat, lon, maxDistance = 1000) {
+        const stations = await BusStation.find({
+            location: {
+                $near: {
+                    $geometry: { type: 'Point', coordinates: [lon, lat] },
+                    $maxDistance: maxDistance
+                }
+            }
+        }).limit(5); // Lấy 5 trạm gần nhất để có nhiều phương án
+        
+        if (stations.length === 0) throw new Error(`Không tìm thấy trạm nào trong bán kính ${maxDistance}m`);
+        return stations;
     }
 
-    /**
-     * PREPROCESSING: Xây dựng cấu trúc dữ liệu RAPTOR
-     */
+    // ==========================================
+    // 2. PREPROCESSING (XỬ LÝ DỮ LIỆU ĐẦU VÀO)
+    // ==========================================
+
     async preprocessRAPTOR(allRoutes) {
-        console.log('🔧 Preprocessing RAPTOR structures...');
+        console.log('🔧 Đang xử lý dữ liệu tuyến & lịch trình...');
         const startTime = Date.now();
 
-        // Clear old data
+        // Xóa cache cũ
         this.routesServingStop.clear();
         this.stopsOfRoute.clear();
         this.stopIndexInRoute.clear();
-        this.footpathAdj.clear();
         this.routeMap.clear();
         this.stationMap.clear();
+        this.routeTimeData.clear();
+        this.footpathAdj.clear();
 
-        // Build route map
-        for (const route of allRoutes) {
-            this.routeMap.set(route._id.toString(), route);
-        }
-
-        // Build RoutesServingStop, StopsOfRoute, StationMap
         for (const route of allRoutes) {
             const routeId = route._id.toString();
+            this.routeMap.set(routeId, route);
+
+            // --- A. Xây dựng bản đồ tuyến/trạm ---
             const orderedStops = this.getOrderedStations(route);
-            
-            // StopsOfRoute[route]
             this.stopsOfRoute.set(routeId, orderedStops);
 
-            // RoutesServingStop[stop] và StationMap
             orderedStops.forEach((stop, index) => {
                 const stopId = stop._id.toString();
+                if (!this.stationMap.has(stopId)) this.stationMap.set(stopId, stop);
                 
-                // Add to station map
-                if (!this.stationMap.has(stopId)) {
-                    this.stationMap.set(stopId, stop);
-                }
-
-                // RoutesServingStop
-                if (!this.routesServingStop.has(stopId)) {
-                    this.routesServingStop.set(stopId, new Set());
-                }
+                if (!this.routesServingStop.has(stopId)) this.routesServingStop.set(stopId, new Set());
                 this.routesServingStop.get(stopId).add(routeId);
 
-                // StopIndexInRoute
-                const key = `${routeId}_${stopId}`;
-                this.stopIndexInRoute.set(key, index);
+                this.stopIndexInRoute.set(`${routeId}_${stopId}`, index);
+            });
+
+            // --- B. Xử lý thời gian (Quan trọng) ---
+            // Nếu DB thiếu dữ liệu, dùng giá trị mặc định (Fallback)
+            const startStr = route.startTime || this.DEFAULT_START_TIME;
+            const endStr = route.endTime || this.DEFAULT_END_TIME;
+            const frequency = route.frequency || this.DEFAULT_FREQUENCY;
+
+            const startSeconds = this.timeStringToSeconds(startStr);
+            const endSeconds = this.timeStringToSeconds(endStr);
+
+            // Tính toán thời gian lăn bánh (Offset) từ bến đầu tiên đến các trạm
+            const stopsOffset = [];
+            let currentRunTime = 0;
+
+            for (let i = 0; i < orderedStops.length; i++) {
+                if (i > 0) {
+                    const prev = orderedStops[i - 1];
+                    const curr = orderedStops[i];
+                    
+                    const distKm = this.calculateDistance(
+                        prev.location.coordinates[1], prev.location.coordinates[0],
+                        curr.location.coordinates[1], curr.location.coordinates[0]
+                    );
+                    
+                    // Thời gian chạy = (Quãng đường / Vận tốc) + 20 giây đón trả khách
+                    const legTime = Math.ceil((distKm * 1000) / this.avgBusSpeed) + 20;
+                    currentRunTime += legTime;
+                }
+                stopsOffset.push(currentRunTime);
+            }
+
+            // Lưu vào cache
+            this.routeTimeData.set(routeId, {
+                startSeconds,
+                endSeconds,
+                frequency,
+                stopsOffset // Mảng giây: [0, 150, 400, ...] thể hiện thời gian xe tới từng trạm tính từ lúc xuất bến
             });
         }
 
-        // Build FootpathAdj (walking connections between nearby stops)
+        // --- C. Xây dựng mạng lưới đi bộ ---
         await this.buildFootpathNetwork();
 
-        console.log(`✅ Preprocessing done in ${Date.now() - startTime}ms`);
-        console.log(`📊 Stats:`);
-        console.log(`   - ${this.stationMap.size} unique stops`);
-        console.log(`   - ${allRoutes.length} routes`);
-        console.log(`   - ${this.footpathAdj.size} stops with walking connections`);
+        console.log(`✅ Preprocessing hoàn tất trong ${Date.now() - startTime}ms`);
     }
 
-    /**
-     * Xây dựng mạng đi bộ giữa các trạm gần nhau
-     */
     async buildFootpathNetwork() {
         const allStops = Array.from(this.stationMap.values());
-        let connectionCount = 0;
         
         for (let i = 0; i < allStops.length; i++) {
             const stopA = allStops[i];
             const stopAId = stopA._id.toString();
-            const coordsA = stopA.location.coordinates;
-
             const footpaths = [];
 
             for (let j = i + 1; j < allStops.length; j++) {
                 const stopB = allStops[j];
-                const coordsB = stopB.location.coordinates;
-
                 const distKm = this.calculateDistance(
-                    coordsA[1], coordsA[0],
-                    coordsB[1], coordsB[0]
+                    stopA.location.coordinates[1], stopA.location.coordinates[0],
+                    stopB.location.coordinates[1], stopB.location.coordinates[0]
                 );
                 const distMeters = distKm * 1000;
 
+                // Nếu khoảng cách < giới hạn cho phép đi bộ
                 if (distMeters <= this.maxWalkDistance) {
-                    const walkTime = Math.ceil(distMeters / this.walkSpeed); // seconds
+                    const walkTime = Math.ceil(distMeters / this.walkSpeed);
                     
-                    footpaths.push({
-                        toStop: stopB._id.toString(),
-                        walkTime: walkTime,
-                        distance: distMeters
-                    });
-
-                    // Bidirectional
+                    // Tạo cạnh nối 2 chiều A <-> B
+                    footpaths.push({ toStop: stopB._id.toString(), walkTime, distance: distMeters });
+                    
                     const stopBId = stopB._id.toString();
-                    if (!this.footpathAdj.has(stopBId)) {
-                        this.footpathAdj.set(stopBId, []);
-                    }
-                    this.footpathAdj.get(stopBId).push({
-                        toStop: stopAId,
-                        walkTime: walkTime,
-                        distance: distMeters
-                    });
-
-                    connectionCount += 2;
+                    if (!this.footpathAdj.has(stopBId)) this.footpathAdj.set(stopBId, []);
+                    this.footpathAdj.get(stopBId).push({ toStop: stopAId, walkTime, distance: distMeters });
                 }
             }
-
-            if (footpaths.length > 0) {
-                this.footpathAdj.set(stopAId, footpaths);
-            }
+            if (footpaths.length > 0) this.footpathAdj.set(stopAId, footpaths);
         }
-
-        console.log(`   - ${connectionCount} walking connections created`);
     }
 
-    /**
-     * MAIN ENTRY POINT: Tìm đường đi sử dụng RAPTOR
-     */
+    // ==========================================
+    // 3. MAIN ENTRY POINT (API GỌI VÀO ĐÂY)
+    // ==========================================
+
     async findShortestPathRAPTOR(startLat, startLon, endLat, endLon, options = {}) {
         const {
             maxDistance = 1000,
-            K = 4, // Max transfers + 1
-            lambda = 300 // Penalty per transfer (seconds)
+            K = 4,                   // Số lần đổi tuyến tối đa
+            lambda = 600,            // Điểm phạt cho mỗi lần đổi chuyến (để ưu tiên ít đổi xe)
+            startTime = new Date()   // Thời gian người dùng bắt đầu tìm
         } = options;
 
-        const totalStart = Date.now();
-
         try {
-            // 1. Tìm trạm gần điểm bắt đầu và kết thúc
+            // 1. Tìm trạm GPS
             const startStations = await this.findNearestStation(startLat, startLon, maxDistance);
             const endStations = await this.findNearestStation(endLat, endLon, maxDistance);
             
-            const startStation = startStations[0];
-            const endStation = endStations[0];
-
-            // Check if same station
-            if (startStation._id.toString() === endStation._id.toString()) {
-                return {
-                    success: true,
-                    message: 'Điểm bắt đầu và điểm đến cùng một trạm',
-                    paths: [],
-                    startStation,
-                    endStation,
-                    computation_time: Date.now() - totalStart
-                };
-            }
-
-            // 2. Load và preprocess routes
-            const routeLoadStart = Date.now();
+            // 2. Load dữ liệu (Thực tế nên cache việc này lúc khởi động server)
             const allRoutes = await BusRoute.find({})
-                .populate('startStationId', 'name address location')
-                .populate('endStationId', 'name address location')
-                .populate('stations.stationId', 'name address location');
+                .populate('startStationId')
+                .populate('endStationId')
+                .populate('stations.stationId');
+            
+            if (allRoutes.length === 0) return { success: false, message: 'Hệ thống chưa có dữ liệu tuyến xe.' };
 
-            console.log(`⏱️  Route loading: ${Date.now() - routeLoadStart}ms`);
-
-            if (allRoutes.length === 0) {
-                return {
-                    success: false,
-                    message: 'Không có tuyến xe buýt nào trong hệ thống',
-                    paths: [],
-                    startStation,
-                    endStation,
-                    computation_time: Date.now() - totalStart
-                };
-            }
-
+            // 3. Chạy Preprocessing
             await this.preprocessRAPTOR(allRoutes);
 
-            // 3. Run RAPTOR với multiple origin/destination
-            const raptorStart = Date.now();
+            // 4. Chạy thuật toán RAPTOR
+            const t0 = this.getMidnightSeconds(startTime); // Đổi giờ hiện tại ra giây
+            
             const result = this.runRAPTOR(
                 startStations.map(s => s._id.toString()),
                 endStations.map(s => s._id.toString()),
-                0, // t0
+                t0,
                 K,
                 lambda
             );
 
-            if (!result.success) {
-                return {
-                    success: false,
-                    message: 'Không tìm thấy đường đi phù hợp',
-                    paths: [],
-                    startStation,
-                    endStation,
-                    computation_time: Date.now() - totalStart
-                };
-            }
-
             return {
-                success: true,
-                message: `Tìm thấy ${result.paths.length} đường đi (Pareto-optimal)`,
-                paths: result.paths,
-                startStation,
-                endStation,
-                algorithm: 'RAPTOR',
-                computation_time: Date.now() - totalStart,
-                stats: result.stats
+                success: result.success,
+                paths: result.paths, // Kết quả đã bao gồm toạ độ cắt ngắn để vẽ bản đồ
+                startStation: startStations[0],
+                endStation: endStations[0],
+                computation_time: result.stats?.computation_time
             };
 
         } catch (error) {
-            console.error('❌ Error in findShortestPathRAPTOR:', error);
+            console.error('Lỗi trong RAPTOR service:', error);
             throw error;
         }
     }
 
-    /**
-     * Core RAPTOR algorithm (Multi-origin, Multi-destination)
-     */
+    // ==========================================
+    // 4. THUẬT TOÁN RAPTOR (CORE LOGIC)
+    // ==========================================
+
     runRAPTOR(originStopIds, destStopIds, t0, K, lambda) {
         const INF = Number.MAX_SAFE_INTEGER;
-        
-        // arr[k][s] = earliest arrival at stop s with k rides
+        // arr[k] lưu thời gian đến sớm nhất tại các trạm sau k chuyến xe
         const arr = Array(K + 1).fill(null).map(() => new Map());
+        // parent[k] lưu vết để truy ngược đường đi
         const parent = Array(K + 1).fill(null).map(() => new Map());
 
-        // Initialize all stops to INF
+        // Khởi tạo
         const allStopIds = Array.from(this.routesServingStop.keys());
-        for (const s of allStopIds) {
-            arr[0].set(s, INF);
-            parent[0].set(s, null);
-        }
+        allStopIds.forEach(s => arr[0].set(s, INF));
 
-        // Initialize multiple origins
-        for (const originId of originStopIds) {
-            arr[0].set(originId, t0);
-            parent[0].set(originId, { type: 'ORIGIN' });
-        }
+        originStopIds.forEach(id => {
+            arr[0].set(id, t0);
+            parent[0].set(id, { type: 'ORIGIN' });
+        });
 
-        // Walking closure at round 0
+        // Đi bộ ở vòng 0 (từ điểm xuất phát có thể đi bộ sang trạm khác)
         this.walkRelax(arr[0], parent[0]);
+        let markedStops = new Set(allStopIds.filter(s => arr[0].get(s) < INF));
 
-        let markedStops = new Set(
-            allStopIds.filter(s => arr[0].get(s) < INF)
-        );
-
-        console.log(`🏁 Round 0: ${markedStops.size} stops reachable`);
-
-        let totalRoutesScanned = 0;
-
-        // Main RAPTOR loop
+        // Vòng lặp chính (Mỗi vòng k là thêm 1 chuyến xe)
         for (let k = 1; k <= K; k++) {
-            console.log(`🔄 Round ${k}...`);
-
-            // Copy previous round
-            for (const s of allStopIds) {
+            // Copy dữ liệu vòng trước
+            allStopIds.forEach(s => {
                 arr[k].set(s, arr[k - 1].get(s));
                 parent[k].set(s, parent[k - 1].get(s));
-            }
+            });
 
-            // Collect routes to scan
+            // Lấy danh sách các tuyến đi qua các trạm đã đánh dấu
             const Qroutes = new Set();
-            for (const s of markedStops) {
+            markedStops.forEach(s => {
                 const routes = this.routesServingStop.get(s);
-                if (routes) {
-                    routes.forEach(r => Qroutes.add(r));
-                }
-            }
-
-            console.log(`  📋 Scanning ${Qroutes.size} routes`);
-            totalRoutesScanned += Qroutes.size;
+                if (routes) routes.forEach(r => Qroutes.add(r));
+            });
 
             const newMarked = new Set();
 
-            // Scan each route
+            // Quét từng tuyến
             for (const routeId of Qroutes) {
                 this.scanRoute(routeId, k, arr, parent, newMarked);
             }
 
-            // Walking relaxation
-            const addMarked = this.walkRelax(arr[k], parent[k]);
-            addMarked.forEach(s => newMarked.add(s));
+            // Quét đi bộ (Transfer)
+            const walkedStops = this.walkRelax(arr[k], parent[k]);
+            walkedStops.forEach(s => newMarked.add(s));
 
             markedStops = newMarked;
-            console.log(`  ✅ Round ${k}: ${markedStops.size} stops improved`);
-
-            if (markedStops.size === 0) {
-                console.log(`  ⏹️  No improvements, stopping early at round ${k}`);
-                break;
-            }
+            if (markedStops.size === 0) break; // Không còn cải thiện được nữa
         }
 
-        // Extract Pareto-optimal paths for all destinations
-        const allSolutions = [];
-        
-        for (const destId of destStopIds) {
-            const solutions = this.extractParetoSolutions(arr, parent, destId, K, lambda);
-            allSolutions.push(...solutions);
-        }
-
-        // Sort by score (arrival time + lambda * transfers)
-        allSolutions.sort((a, b) => {
-            const scoreA = a.score;
-            const scoreB = b.score;
-            return scoreA - scoreB;
+        // Trích xuất kết quả tối ưu (Pareto Optimization)
+        const solutions = [];
+        destStopIds.forEach(dest => {
+            solutions.push(...this.extractParetoSolutions(arr, parent, dest, K, lambda));
         });
 
-        // Remove duplicates and keep best 3
-        const uniqueSolutions = this.removeDuplicatePaths(allSolutions);
-        const topSolutions = uniqueSolutions.slice(0, 3);
-
+        // Sắp xếp theo điểm số (Thời gian + Số lần đổi chuyến)
+        solutions.sort((a, b) => a.score - b.score);
+        
         return {
-            success: topSolutions.length > 0,
-            paths: topSolutions,
-            stats: {
-                rounds_executed: Math.min(K, markedStops.size),
-                routes_scanned: totalRoutesScanned,
-                solutions_found: allSolutions.length,
-                unique_solutions: uniqueSolutions.length
-            }
+            success: solutions.length > 0,
+            paths: this.removeDuplicatePaths(solutions).slice(0, 3), // Chỉ lấy top 3 kết quả tốt nhất
+            stats: { solutions_found: solutions.length }
         };
     }
 
     /**
-     * Scan một route trong round k (Core RAPTOR operation)
+     * Quét một tuyến xe để xem có cải thiện được thời gian đến không
      */
     scanRoute(routeId, k, arr, parent, newMarked) {
         const stops = this.stopsOfRoute.get(routeId);
-        if (!stops || stops.length === 0) return;
+        const timeData = this.routeTimeData.get(routeId);
+        if (!stops || !timeData) return;
 
-        let boardedStopId = null;
-        let boardedStopIndex = -1;
-        let boardTime = null;
-
+        let boardedTrip = null; // Biến lưu chuyến xe đang ngồi
+        
         for (let i = 0; i < stops.length; i++) {
-            const stop = stops[i];
-            const stopId = stop._id.toString();
+            const stopId = stops[i]._id.toString();
+            const currentOffset = timeData.stopsOffset[i];
 
-            // Try to board at this stop
-            if (boardedStopId === null) {
-                const prevArrival = arr[k - 1].get(stopId);
-                
-                if (prevArrival !== undefined && prevArrival < Number.MAX_SAFE_INTEGER) {
-                    const tReady = prevArrival + this.minTransferTime;
-                    
-                    // Can board here
-                    boardedStopId = stopId;
-                    boardedStopIndex = i;
-                    boardTime = tReady;
-                }
-            } else {
-                // Already boarded, calculate arrival at this stop
-                const travelTime = this.estimateTravelTime(routeId, boardedStopIndex, i);
-                const tArr = boardTime + travelTime;
+            // 1. XUỐNG XE (ALIGHT)
+            if (boardedTrip !== null) {
+                // Thời gian đến = Giờ xe chạy + (Offset hiện tại - Offset lúc lên)
+                const travelTime = currentOffset - boardedTrip.boardOffset;
+                const arrivalTime = boardedTrip.departureTime + travelTime;
 
                 const currentBest = arr[k].get(stopId);
                 
-                if (tArr < currentBest) {
-                    arr[k].set(stopId, tArr);
+                // Nếu đến sớm hơn kỷ lục cũ
+                if (currentBest === undefined || arrivalTime < currentBest) {
+                    arr[k].set(stopId, arrivalTime);
                     parent[k].set(stopId, {
                         type: 'RIDE',
                         routeId: routeId,
-                        boardStop: boardedStopId,
-                        boardIndex: boardedStopIndex,
+                        boardStop: boardedTrip.boardStopId,
                         alightStop: stopId,
-                        alightIndex: i
+                        departureTime: boardedTrip.departureTime,
+                        arrivalTime: arrivalTime
                     });
                     newMarked.add(stopId);
                 }
             }
-        }
-    }
 
-    /**
-     * Ước lượng thời gian di chuyển giữa 2 trạm trên cùng tuyến
-     */
-    estimateTravelTime(routeId, fromIndex, toIndex) {
-        const stops = this.stopsOfRoute.get(routeId);
-        
-        if (!stops || fromIndex < 0 || toIndex >= stops.length || fromIndex >= toIndex) {
-            return Number.MAX_SAFE_INTEGER;
-        }
-
-        // Calculate total distance
-        let totalDist = 0;
-        for (let i = fromIndex; i < toIndex; i++) {
-            const s1 = stops[i];
-            const s2 = stops[i + 1];
+            // 2. LÊN XE (BOARD)
+            // Kiểm tra xem có thể đến trạm này từ vòng trước không
+            const prevArrival = arr[k - 1].get(stopId);
             
-            const dist = this.calculateDistance(
-                s1.location.coordinates[1], s1.location.coordinates[0],
-                s2.location.coordinates[1], s2.location.coordinates[0]
-            );
-            totalDist += dist;
+            if (prevArrival !== undefined && prevArrival < Number.MAX_SAFE_INTEGER) {
+                const readyTime = prevArrival + this.minTransferTime;
+                
+                // Tìm chuyến xe tiếp theo khởi hành sau readyTime
+                const nextBusTime = this.findNextDepartureTime(routeId, i, readyTime);
+
+                if (nextBusTime !== null) {
+                    // Nếu chưa lên xe, hoặc chuyến mới này đến sớm hơn chuyến đang ngồi
+                    if (boardedTrip === null || nextBusTime < boardedTrip.departureTime) {
+                        boardedTrip = {
+                            departureTime: nextBusTime,
+                            boardOffset: currentOffset,
+                            boardStopId: stopId
+                        };
+                    }
+                }
+            }
         }
-
-        // Convert to time: distance(km) * 1000(m) / speed(m/s)
-        const travelTime = Math.ceil((totalDist * 1000) / this.avgBusSpeed);
-        
-        // Add dwell time per stop (assume 30 seconds per stop)
-        const numStops = toIndex - fromIndex;
-        const dwellTime = numStops * 30;
-
-        return travelTime + dwellTime;
     }
 
     /**
-     * Walking relaxation (Footpath connections)
+     * Tính toán chuyến xe tiếp theo dựa trên StartTime, EndTime và Frequency
+     */
+    findNextDepartureTime(routeId, stopIndex, afterTime) {
+        const data = this.routeTimeData.get(routeId);
+        if (!data) return null;
+
+        const { startSeconds, endSeconds, frequency, stopsOffset } = data;
+        const offsetAtStop = stopsOffset[stopIndex];
+
+        // Thời gian chuyến ĐẦU TIÊN trong ngày đến trạm này
+        const firstTripAtStop = startSeconds + offsetAtStop;
+        
+        // Thời gian chuyến CUỐI CÙNG trong ngày đến trạm này
+        const lastTripAtStop = endSeconds + offsetAtStop;
+
+        // Trường hợp A: Khách đến sớm hơn chuyến đầu
+        if (afterTime <= firstTripAtStop) {
+            return firstTripAtStop;
+        }
+
+        // Trường hợp B: Khách đến muộn hơn chuyến cuối -> Hết xe
+        if (afterTime > lastTripAtStop) {
+            return null;
+        }
+
+        // Trường hợp C: Tính chuyến tiếp theo theo tần suất
+        const timeSinceFirst = afterTime - firstTripAtStop;
+        const tripsPassed = Math.ceil(timeSinceFirst / frequency);
+        
+        const nextTripTime = firstTripAtStop + (tripsPassed * frequency);
+
+        if (nextTripTime > lastTripAtStop) return null;
+
+        return nextTripTime;
+    }
+
+    /**
+     * Logic đi bộ nối chuyến
      */
     walkRelax(arrK, parentK) {
         const marked = new Set();
         const queue = [];
-
-        // Initialize queue với các stop đã có arrival time
+        
         for (const [stopId, time] of arrK.entries()) {
-            if (time < Number.MAX_SAFE_INTEGER) {
-                queue.push(stopId);
-            }
+            if (time < Number.MAX_SAFE_INTEGER) queue.push(stopId);
         }
 
-        let processed = 0;
         while (queue.length > 0) {
             const u = queue.shift();
-            processed++;
-            
             const footpaths = this.footpathAdj.get(u);
             if (!footpaths) continue;
 
             for (const { toStop: v, walkTime } of footpaths) {
                 const newTime = arrK.get(u) + walkTime;
                 const currentBest = arrK.get(v);
-                
+
                 if (currentBest === undefined || newTime < currentBest) {
                     arrK.set(v, newTime);
-                    parentK.set(v, {
-                        type: 'WALK',
-                        fromStop: u,
-                        toStop: v
-                    });
+                    parentK.set(v, { type: 'WALK', fromStop: u, toStop: v, walkTime }); // Lưu walkTime
                     marked.add(v);
-                    
-                    if (!queue.includes(v)) {
-                        queue.push(v);
-                    }
+                    if (!queue.includes(v)) queue.push(v);
                 }
             }
         }
-
         return marked;
     }
 
+    // ==========================================
+    // 5. TÁI TẠO ĐƯỜNG ĐI & CẮT NGẮN TUYẾN
+    // ==========================================
+
     /**
-     * Trích xuất các nghiệm Pareto-optimal
+     * Hàm quan trọng: Cắt danh sách toạ độ chỉ lấy đoạn cần đi
+     * Để tránh việc vẽ full cả tuyến xe lên bản đồ
      */
+    getSegmentStations(routeId, boardStopId, alightStopId) {
+        const stops = this.stopsOfRoute.get(routeId); 
+        if (!stops) return [];
+
+        const startIndex = this.stopIndexInRoute.get(`${routeId}_${boardStopId}`);
+        const endIndex = this.stopIndexInRoute.get(`${routeId}_${alightStopId}`);
+
+        if (startIndex === undefined || endIndex === undefined) return [];
+
+        // Chỉ lấy các trạm từ điểm lên đến điểm xuống
+        if (startIndex <= endIndex) {
+            return stops.slice(startIndex, endIndex + 1).map(s => ({
+                name: s.name,
+                lat: s.location.coordinates[1],
+                lng: s.location.coordinates[0]
+            }));
+        }
+        return [];
+    }
+
     extractParetoSolutions(arr, parent, destStopId, K, lambda) {
         const solutions = [];
-        const destArrival = [];
+        const destArrivals = [];
 
-        // Collect all arrival times at destination
+        // Thu thập các thời gian đến đích ở các vòng k khác nhau
         for (let k = 0; k <= K; k++) {
-            const arrTime = arr[k].get(destStopId);
-            
-            if (arrTime !== undefined && arrTime < Number.MAX_SAFE_INTEGER) {
-                destArrival.push({ round: k, arrivalTime: arrTime });
+            const time = arr[k].get(destStopId);
+            if (time !== undefined && time < Number.MAX_SAFE_INTEGER) {
+                destArrivals.push({ k, time });
             }
         }
 
-        if (destArrival.length === 0) return solutions;
-
-        // Sort by arrival time
-        destArrival.sort((a, b) => a.arrivalTime - b.arrivalTime);
-
-        // Extract Pareto-optimal solutions
+        destArrivals.sort((a, b) => a.time - b.time);
         let minTransfers = Infinity;
-        
-        for (const { round: k, arrivalTime } of destArrival) {
+
+        // Lọc Pareto: Chỉ lấy các kết quả Tốt hơn về Thời gian HOẶC Số lần đổi chuyến
+        for (const { k, time } of destArrivals) {
             const transfers = Math.max(0, k - 1);
             
-            // Pareto condition: improve either time or transfers
-            const isParetoOptimal = 
-                solutions.length === 0 ||
-                arrivalTime < solutions[solutions.length - 1].arrivalTime ||
-                transfers < minTransfers;
-
-            if (isParetoOptimal) {
-                const path = this.reconstructPath(parent, destStopId, k);
+            if (transfers < minTransfers) {
+                const pathData = this.reconstructPath(parent, destStopId, k);
                 
-                // Chỉ thêm giải pháp nếu có ít nhất một chặng đi xe hoặc là đi bộ thuần túy (k=0)
-                if (path.routes.length > 0 || k === 0) {
-                    solutions.push({
-                        arrivalTime: arrivalTime,
-                        transfers: transfers,
-                        routes: path.routes,
-                        totalDistance: path.totalDistance,
-                        totalCost: path.totalCost,
-                        // Thêm 2 trường mới về thời gian di chuyển
-                        totalTravelTimeSeconds: path.totalTravelTimeSeconds,
-                        totalTravelTimeFormatted: this.formatTime(path.totalTravelTimeSeconds),
-                        score: arrivalTime + lambda * transfers
-                    });
-                    
-                    minTransfers = Math.min(minTransfers, transfers);
-                }
+                solutions.push({
+                    arrivalTime: time,
+                    arrivalTimeStr: this.formatTime(time),
+                    transfers,
+                    routes: pathData.segments, // Mảng các chặng đi (đã cắt ngắn toạ độ)
+                    totalTravelTimeSeconds: pathData.totalDuration,
+                    totalTravelTimeStr: this.formatTime(pathData.totalDuration),
+                    score: time + (transfers * lambda) // Điểm số để sort
+                });
+                minTransfers = transfers;
             }
         }
-
         return solutions;
     }
 
-    findCoordinatesBetweenStations(segment, boardStation, alightStation) {
-        const route = this.routeMap.get(segment.routeId);
-        if (!route || !route.stations || route.stations.length === 0) {
-            return [];
-        }
-        const orderedStations = this.getOrderedStations(route);
-        const boardIndex = orderedStations.findIndex(s => s._id.toString() === boardStation._id.toString());
-        const alightIndex = orderedStations.findIndex(s => s._id.toString() === alightStation._id.toString());
-        if (boardIndex === -1 || alightIndex === -1 || boardIndex >= alightIndex) {
-            return [];
-        }
-        const stations = [];
-        for (let i = boardIndex; i <= alightIndex; i++) {
-            const station = orderedStations[i];
-            stations.push(station);
-        }
-        return stations;
-    }
-
-    /**
-     * Reconstruct path từ parent pointers
-     * ĐÃ CẬP NHẬT: Tính toán và trả về totalTravelTimeSeconds
-     */
     reconstructPath(parent, destStopId, k) {
         const segments = [];
-        let currentStopId = destStopId;
-        let currentRound = k;
-        let totalTravelTimeSeconds = 0; // Biến tích lũy tổng thời gian di chuyển
+        let curr = destStopId;
+        let round = k;
+        let firstStartTime = null;
+        let lastEndTime = null;
 
-        while (currentRound >= 0) {
-            const p = parent[currentRound].get(currentStopId);
-            
-            if (!p || p.type === 'ORIGIN') break;
+        while (round >= 0) {
+            const p = parent[round].get(curr);
+            if (!p || p.type === 'ORIGIN') {
+                if (!firstStartTime && round === 0) firstStartTime = parent[0].get(curr);
+                break;
+            }
 
             if (p.type === 'RIDE') {
                 const route = this.routeMap.get(p.routeId);
-                const boardStation = this.stationMap.get(p.boardStop);
-                const alightStation = this.stationMap.get(p.alightStop);
+                const boardSt = this.stationMap.get(p.boardStop);
+                const alightSt = this.stationMap.get(p.alightStop);
                 
-                const distance = this.calculateSegmentDistance(
-                    boardStation,
-                    alightStation
-                );
-                
-                const travelTime = this.estimateTravelTime(p.routeId, p.boardIndex, p.alightIndex);
-                totalTravelTimeSeconds += travelTime; // CỘNG thời gian đi xe
+                if (!lastEndTime) lastEndTime = p.arrivalTime; 
+                firstStartTime = p.departureTime;
 
-                const stations = this.findCoordinatesBetweenStations(
-                    p,
-                    boardStation,
-                    alightStation
-                );
+                // --- GỌI HÀM CẮT NGẮN TUYẾN ---
+                const pathCoordinates = this.getSegmentStations(p.routeId, p.boardStop, p.alightStop);
+                // -------------------------------
 
                 segments.unshift({
                     type: 'RIDE',
                     routeId: p.routeId,
-                    routeName: route?.routeName || 'Unknown',
-                    ticketPrice: route?.ticketPrice || 7000,
-                    boardStation: boardStation,
-                    alightStation: alightStation,
-                    distance: distance,
-                    travelTime: travelTime,
-                    stations: stations
+                    routeName: route.routeName || 'Bus Route',
+                    from: boardSt.name,
+                    to: alightSt.name,
+                    departureTime: this.formatTime(p.departureTime),
+                    arrivalTime: this.formatTime(p.arrivalTime),
+                    // Backend trả về toạ độ đã cắt để Frontend vẽ
+                    pathCoordinates: pathCoordinates 
                 });
-
-                currentStopId = p.boardStop;
-                currentRound--;
-                
+                curr = p.boardStop;
+                round--; 
             } else if (p.type === 'WALK') {
-                const fromStation = this.stationMap.get(p.fromStop);
-                const toStation = this.stationMap.get(p.toStop);
+                const fromSt = this.stationMap.get(p.fromStop);
+                const toSt = this.stationMap.get(p.toStop);
                 
-                // Lấy walkTime từ footpathAdj
-                const footpaths = this.footpathAdj.get(p.fromStop);
-                const walkSegment = footpaths ? footpaths.find(f => f.toStop === p.toStop) : null;
-                const walkTime = walkSegment ? walkSegment.walkTime : 0;
-                
-                totalTravelTimeSeconds += walkTime; // CỘNG thời gian đi bộ
-
+                // Segment đi bộ cũng cần toạ độ để vẽ đường nét đứt
                 segments.unshift({
                     type: 'WALK',
-                    fromStation: fromStation,
-                    toStation: toStation,
-                    distance: this.calculateSegmentDistance(fromStation, toStation),
-                    walkTime: walkTime
+                    from: fromSt.name,
+                    to: toSt.name,
+                    walkTime: p.walkTime || 300,
+                    walkTimeStr: this.formatTime(p.walkTime || 300),
+                    pathCoordinates: [
+                        { lat: fromSt.location.coordinates[1], lng: fromSt.location.coordinates[0] },
+                        { lat: toSt.location.coordinates[1], lng: toSt.location.coordinates[0] }
+                    ],
+                    description: `Đi bộ từ ${fromSt.name} đến ${toSt.name}`
                 });
-
-                currentStopId = p.fromStop;
+                curr = p.fromStop;
             }
         }
 
-        const rideSegments = segments.filter(s => s.type === 'RIDE');
-        
         return {
-            routes: rideSegments,
-            totalDistance: segments.reduce((sum, s) => sum + (s.distance || 0), 0),
-            totalCost: rideSegments.reduce((sum, s) => sum + (s.ticketPrice || 0), 0),
-            totalTravelTimeSeconds: totalTravelTimeSeconds // Trả về tổng thời gian
+            segments,
+            totalDuration: (lastEndTime && firstStartTime) ? (lastEndTime - firstStartTime) : 0
         };
     }
 
-    /**
-     * Remove duplicate paths (same route sequence)
-     */
     removeDuplicatePaths(solutions) {
         const seen = new Set();
-        const unique = [];
-
-        for (const sol of solutions) {
-            const signature = sol.routes
-                .map(r => r.routeId)
-                .join('->');
-
-            if (!seen.has(signature)) {
-                seen.add(signature);
-                unique.push(sol);
-            }
-        }
-
-        return unique;
+        return solutions.filter(sol => {
+            // Tạo key duy nhất dựa trên chuỗi các RouteId
+            const key = sol.routes.map(r => r.type === 'RIDE' ? r.routeId : 'walk').join('|');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
     }
 
-    /**
-     * Calculate distance between two stations
-     */
-    calculateSegmentDistance(station1, station2) {
-        if (!station1 || !station2 || 
-            !station1.location || !station2.location) {
-            return 0;
-        }
-        
-        return this.calculateDistance(
-            station1.location.coordinates[1],
-            station1.location.coordinates[0],
-            station2.location.coordinates[1],
-            station2.location.coordinates[0]
-        );
-    }
-
-    /**
-     * Get ordered stations of a route
-     */
     getOrderedStations(route) {
         const stations = [];
-        
-        if (route.startStationId) {
-            stations.push(route.startStationId);
+        if (route.startStationId) stations.push(route.startStationId);
+        if (route.stations) {
+            [...route.stations].sort((a, b) => a.order - b.order).forEach(s => stations.push(s.stationId));
         }
-
-        if (route.stations && route.stations.length > 0) {
-            const sorted = [...route.stations].sort((a, b) => a.order - b.order);
-            for (const s of sorted) {
-                if (s.stationId) {
-                    stations.push(s.stationId);
-                }
-            }
-        }
-
-        if (route.endStationId) {
-            stations.push(route.endStationId);
-        }
-
+        if (route.endStationId) stations.push(route.endStationId);
         return stations;
-    }
-
-    /**
-     * Format time (seconds) to readable string
-     */
-    formatTime(seconds) {
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        const secs = seconds % 60;
-
-        if (hours > 0) {
-            // Làm tròn phút nếu có giây
-            const totalMinutes = Math.round(seconds / 60); 
-            const finalHours = Math.floor(totalMinutes / 60);
-            const finalMinutes = totalMinutes % 60;
-            return `${finalHours} giờ ${finalMinutes} phút`;
-        } else if (minutes > 0) {
-            return `${minutes} phút ${secs} giây`;
-        } else {
-            return `${secs} giây`;
-        }
-    }
-
-    // ==================== BACKWARD COMPATIBILITY ====================
-    // Keep old methods for existing code that might use them
-
-    /**
-     * @deprecated Use findShortestPathRAPTOR instead
-     */
-    async findShortestPath(startLat, startLon, endLat, endLon, maxDistance = 1000) {
-        console.warn('⚠️  findShortestPath is deprecated. Use findShortestPathRAPTOR instead.');
-        return this.findShortestPathRAPTOR(startLat, startLon, endLat, endLon, { maxDistance });
-    }
-
-    /**
-     * Helper: Tìm tất cả các tuyến đi qua một trạm
-     */
-    async findRoutesPassingThroughStation(stationId) {
-        const routes = await BusRoute.find({
-            $or: [
-                { startStationId: stationId },
-                { endStationId: stationId },
-                { 'stations.stationId': stationId }
-            ]
-        })
-        .populate('startStationId', 'name address location')
-        .populate('endStationId', 'name address location')
-        .populate('stations.stationId', 'name address location');
-
-        return routes;
     }
 }
 
